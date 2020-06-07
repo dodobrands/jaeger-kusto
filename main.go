@@ -12,7 +12,7 @@ import (
 func main() {
 
 	logger := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
+		Level:      hclog.Warn,
 		Name:       "jaeger-kusto",
 		JSONFormat: true,
 	})
@@ -26,7 +26,7 @@ func main() {
 
 	kustoConfig := store.InitConfig(configPath)
 
-	logger.Info(fmt.Sprintf("%#v", kustoConfig))
+	logger.Warn(fmt.Sprintf("%#v", kustoConfig))
 
 	kustoStore := store.NewStore(*kustoConfig, logger)
 	grpc.Serve(kustoStore)

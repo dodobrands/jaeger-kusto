@@ -1,9 +1,9 @@
 package store
 
 import (
+	"fmt"
 	"github.com/spf13/viper"
 	"path"
-	"strings"
 )
 
 const (
@@ -27,11 +27,17 @@ func InitConfig(configPath string) *KustoConfig {
 	if configPath != "" {
 		viper.SetConfigFile(path.Base(configPath))
 		viper.AddConfigPath(path.Dir(configPath))
+		viper.SetConfigName("config")
+		viper.SetConfigType("yaml")
+		err := viper.ReadInConfig() // Find and read the config file
+		if err != nil { // Handle errors reading the config file
+			panic(fmt.Errorf("Fatal error config file: %s \n", err))
+		}
 	}
 
 	v := viper.New()
 	v.AutomaticEnv()
-	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
+	//v.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 
 	kustoConfig = &KustoConfig{
 		ClientID:     v.GetString(clientId),

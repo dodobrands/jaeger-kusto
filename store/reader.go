@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
 	"github.com/Azure/azure-kusto-go/kusto/data/types"
@@ -24,29 +23,41 @@ func NewKustoSpanReader(client *kusto.Client, logger hclog.Logger) *KustoSpanRea
 
 func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
 
-	kustoStmt := kusto.NewStmt("Traces | where TraceID == TraceID").MustDefinitions(
+	kustoStmt := kusto.NewStmt("Spans | where TraceID == ParamTraceID").MustDefinitions(
 		kusto.NewDefinitions().Must(
 			kusto.ParamTypes{
-				"TraceID": kusto.ParamType{Type: types.String},
+				"ParamTraceID": kusto.ParamType{Type: types.String},
 			},
-		),).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"TraceID": traceID}))
+		),).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
 
-	iter, err := r.client.Query(ctx, "Jaeger", kustoStmt)
+	iter, err := r.client.Query(ctx, "jaeger", kustoStmt)
 	if err != nil {
 		panic("add error handling")
 	}
 	defer iter.Stop()
+
+
+
+	var spans []*model.Span
 	err = iter.Do(
 		func(row *table.Row) error {
-			fmt.Println(row) // As a convenience, printing a *table.Row will output csv
+			rec := KustoSpan{}
+			if err := row.ToStruct(&rec); err != nil {
+				return err
+			}
+			var span *model.Span
+			span, err = TransformKustoSpanToSpan(&rec)
+			if err != nil {
+				return err
+			}
+			spans = append(spans, span)
 			return nil
 		},
 	)
-	if err != nil {
-		panic("add error handling")
-	}
 
-	return nil, errors.New("not implemented")
+	trace := model.Trace{Spans: spans}
+
+	return &trace, err
 }
 
 func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryParameters) ([]model.TraceID, error) {

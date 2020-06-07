@@ -17,7 +17,7 @@ type Store struct {
 func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 
 	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig("clientID", "clientSecret", "tenantID"),
+		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
 	}
 
 	client, err := kusto.New(config.Endpoint, authorizer)
