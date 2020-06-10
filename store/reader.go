@@ -22,6 +22,7 @@ func NewKustoSpanReader(client *kusto.Client, logger hclog.Logger) *KustoSpanRea
 }
 
 const JaegerDatabase = "jaeger"
+const defaultNumTraces = 20
 
 func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
 
@@ -239,8 +240,11 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		return nil, err
 	}
 
+	if query.NumTraces == 0 {
+		query.NumTraces = defaultNumTraces
+	}
 
-	kustoStmt := kusto.NewStmt("let TraceIDs = (Spans")
+	kustoStmt := kusto.NewStmt("set truncationmaxsize=268435456; let TraceIDs = (Spans")
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -285,11 +289,9 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	// Last aggregation
 	kustoStmt = kustoStmt.Add(" | summarize by TraceID")
 
-	if query.NumTraces != 0  {
-		kustoStmt.Add(` | sample ParamNumTraces`)
-		kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
-		kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
-	}
+	kustoStmt = kustoStmt.Add(` | sample ParamNumTraces`)
+	kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
+	kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
 
 	kustoStmt = kustoStmt.Add("); Spans")
 

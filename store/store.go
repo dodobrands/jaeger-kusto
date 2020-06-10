@@ -28,7 +28,6 @@ func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 	}
 
 
-
 	reader := NewKustoSpanReader(client, logger)
 	writer := NewKustoSpanWriter(client, logger)
 	store := &Store{
