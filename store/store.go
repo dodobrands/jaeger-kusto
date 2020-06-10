@@ -1,6 +1,8 @@
 package store
 
 import (
+	"fmt"
+
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/hashicorp/go-hclog"
@@ -22,8 +24,10 @@ func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 
 	client, err := kusto.New(config.Endpoint, authorizer)
 	if err != nil {
-		panic("add error handling")
+		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
+
+
 
 	reader := NewKustoSpanReader(client, logger)
 	writer := NewKustoSpanWriter(client, logger)

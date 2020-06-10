@@ -1,13 +1,10 @@
 package store
 
 import (
-	"bytes"
 	"encoding/json"
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/plugin/storage/es/spanstore/dbmodel"
-	"github.com/tushar2708/altcsv"
-	"io"
 	"strconv"
 	"time"
 )
@@ -113,7 +110,7 @@ func getTagsValues(tags []model.KeyValue) []string {
 }
 
 // Transforms Jaeger span to CSV
-func TransformSpanToCSV(span *model.Span) (io.Reader, error) {
+func TransformSpanToCSV(span *model.Span) ([]string, error) {
 
 	spanConverter := dbmodel.NewFromDomain(true, getTagsValues(span.Tags), TagDotReplacementCharacter)
 	jsonSpan := spanConverter.FromDomainEmbedProcess(span)
@@ -150,12 +147,6 @@ func TransformSpanToCSV(span *model.Span) (io.Reader, error) {
 		span.ProcessID,
 	}
 
-	b := &bytes.Buffer{}
-	writer := altcsv.NewWriter(b)
-	writer.AllQuotes = true
-	err = writer.Write(kustoStringSpan)
-	writer.Flush()
-	err = writer.Error()
 
-	return b, err
+	return kustoStringSpan, err
 }

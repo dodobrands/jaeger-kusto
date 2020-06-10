@@ -1,0 +1,9 @@
+FROM jaegertracing/jaeger-query:1.18
+FROM alpine
+COPY --from=0 /go/bin/query-linux /go/bin/query-linux
+RUN apk add --update --no-cache ca-certificates
+
+ENV SPAN_STORAGE_TYPE grpc-plugin
+ENV GRPC_STORAGE_PLUGIN_BINARY "/go/bin/jaeger-kusto"
+COPY ./jaeger-kusto /go/bin/
+ENTRYPOINT /go/bin/query-linux

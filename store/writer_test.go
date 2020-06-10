@@ -5,7 +5,6 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
@@ -32,10 +31,40 @@ func TestWriteSpan(tester *testing.T) {
 			ServiceName: testService,
 		},
 		StartTime: date,
-		Duration: 34252523*time.Millisecond,
+		Duration: 34523*time.Millisecond,
 		Tags: []model.KeyValue{model.KeyValue{
 			Key:  "abc",
 			VStr: "sdf",
+		}},
+	}
+
+	span2 := &model.Span{
+		TraceID:       model.NewTraceID(5355, 51),
+		SpanID:        model.NewSpanID(3434343434),
+		OperationName: testOperation,
+		Process: &model.Process{
+			ServiceName: testService,
+		},
+		StartTime: date,
+		Duration: 34242*time.Millisecond,
+		Tags: []model.KeyValue{model.KeyValue{
+			Key:  "rty",
+			VStr: "fgh",
+		}},
+	}
+
+	span3 := &model.Span{
+		TraceID:       model.NewTraceID(5555, 55),
+		SpanID:        model.NewSpanID(567676755756767),
+		OperationName: testOperation,
+		Process: &model.Process{
+			ServiceName: testService,
+		},
+		StartTime: date,
+		Duration: 12121*time.Millisecond,
+		Tags: []model.KeyValue{model.KeyValue{
+			Key:  "qwe",
+			VStr: "zxc",
 		}},
 	}
 
@@ -52,6 +81,8 @@ func TestWriteSpan(tester *testing.T) {
 
 	writer := NewKustoSpanWriter(client, logger)
 
-	assert.NoError(tester, writer.WriteSpan(span))
+	writer.WriteSpan(span)
+	writer.WriteSpan(span2)
+	writer.WriteSpan(span3)
 
 }

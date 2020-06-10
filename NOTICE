@@ -1,3 +1,5 @@
 Includes software developed at Uber Technologies, Inc. (https://eng.uber.com/).
 Includes software from Jaeger, Distributed Tracing Platform. Copyright 2015-2019 The Jaeger Project Authors
 https://github.com/jaegertracing/jaeger
+
+We took inspiration from https://github.com/logzio/jaeger-logzio
