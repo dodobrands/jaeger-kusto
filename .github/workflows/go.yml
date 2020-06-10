@@ -32,6 +32,9 @@ jobs:
 
     - name: Build
       run: go build -v .
+    
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v1.2.1
 
     - name: Build collector
       run: docker build . --file Dockerfile.collector --tag collector
