@@ -5,26 +5,12 @@ import (
 	"encoding/json"
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
 	"github.com/jaegertracing/jaeger/model"
+	"github.com/jaegertracing/jaeger/plugin/storage/es/spanstore/dbmodel"
 	"github.com/tushar2708/altcsv"
 	"io"
 	"strconv"
-	"strings"
 	"time"
 )
-
-type ToDomain struct {
-	tagDotReplacement string
-}
-
-// ReplaceDot replaces dot with dotReplacement
-func (td ToDomain) ReplaceDot(k string) string {
-	return strings.Replace(k, ".", td.tagDotReplacement, -1)
-}
-
-// ReplaceDotReplacement replaces dotReplacement with dot
-func (td ToDomain) ReplaceDotReplacement(k string) string {
-	return strings.Replace(k, td.tagDotReplacement, ".", -1)
-}
 
 type KustoSpan struct {
 	TraceID            string        `kusto:"TraceID"`
@@ -40,81 +26,111 @@ type KustoSpan struct {
 	ProcessTags        value.Dynamic `kusto:"ProcessTags"`
 	ProcessID          string        `kusto:"ProcessID"`
 }
+const (
+	//TagDotReplacementCharacter state which character should replace the dot in es
+	TagDotReplacementCharacter = "_"
+)
 
 
 func TransformKustoSpanToSpan(kustoSpan *KustoSpan) (*model.Span, error){
 
-	refs := []model.SpanRef{}
+
+	var refs []dbmodel.Reference
 	err := json.Unmarshal(kustoSpan.References.Value, &refs)
 	if err != nil {
 		return nil, err
 	}
 
-	tags := []model.KeyValue{}
+	var tags map[string]interface{}
 	err = json.Unmarshal(kustoSpan.Tags.Value, &tags)
 	if err != nil {
 		return nil, err
 	}
 
-	logs := []model.Log{}
+	var logs []dbmodel.Log
 	err = json.Unmarshal(kustoSpan.Logs.Value, &logs)
 	if err != nil {
 		return nil, err
 	}
 
-	processTags := []model.KeyValue{}
-	err = json.Unmarshal(kustoSpan.ProcessTags.Value, &processTags)
-	if err != nil {
-		return nil, err
-	}
+	var process dbmodel.Process
 
-	process := &model.Process{
+	process = dbmodel.Process{
 		ServiceName: kustoSpan.ProcessServiceName,
-		Tags: processTags,
+		Tags:        nil,
+		Tag: nil,
 	}
 
-	traceID, err := model.TraceIDFromString(string(kustoSpan.TraceID))
+	err = json.Unmarshal(kustoSpan.ProcessTags.Value, &process.Tag)
 	if err != nil {
 		return nil, err
 	}
 
-	spanIDInt, err := model.SpanIDFromString(string(kustoSpan.SpanID))
+	jsonSpan := &dbmodel.Span{
+		TraceID:         dbmodel.TraceID(kustoSpan.TraceID),
+		SpanID:          dbmodel.SpanID(kustoSpan.SpanID),
+		Flags:           uint32(kustoSpan.Flags),
+		OperationName:   "",
+		References:      refs,
+		StartTime:       0,
+		StartTimeMillis: 0,
+		Duration:        0,
+		Tags:            nil,
+		Tag:             tags,
+		Logs:            logs,
+		Process:         process,
+	}
+
+	spanConverter := dbmodel.NewToDomain(TagDotReplacementCharacter)
+	convertedSpan, err := spanConverter.SpanToDomain(jsonSpan)
 	if err != nil {
 		return nil, err
 	}
 
 	span := &model.Span{
-		TraceID:       traceID,
-		SpanID:        model.NewSpanID(uint64(spanIDInt)),
+		TraceID:       convertedSpan.TraceID,
+		SpanID:        convertedSpan.SpanID,
 		OperationName: kustoSpan.OperationName,
-		References:    refs,
-		Flags:         model.Flags(uint32(kustoSpan.Flags)),
+		References:    convertedSpan.References,
+		Flags:         convertedSpan.Flags,
 		StartTime:     kustoSpan.StartTime,
 		Duration:      kustoSpan.Duration,
-		Tags:          tags,
-		Logs:          logs,
-		Process:       process,
+		Tags:          convertedSpan.Tags,
+		Logs:          convertedSpan.Logs,
+		Process:       convertedSpan.Process,
 	}
 
 	return span, err
 }
 
+
+func getTagsValues(tags []model.KeyValue) []string {
+	var values []string
+	for i := range tags {
+		values = append(values, tags[i].VStr)
+	}
+	return values
+}
+
 // Transforms Jaeger span to CSV
 func TransformSpanToCSV(span *model.Span) (io.Reader, error) {
 
-	references, err := json.Marshal(span.References)
+	spanConverter := dbmodel.NewFromDomain(true, getTagsValues(span.Tags), TagDotReplacementCharacter)
+	jsonSpan := spanConverter.FromDomainEmbedProcess(span)
+
+	references, err := json.Marshal(jsonSpan.References)
 	if err != nil {
 		return nil, err
 	}
-	tags, err := json.Marshal(span.Tags)
+	tags, err := json.Marshal(jsonSpan.Tag)
 	if err != nil {
 		return nil, err
 	}
-	logs, err := json.Marshal(span.Logs)
+	logs, err := json.Marshal(jsonSpan.Logs)
 	if err != nil {
 		return nil, err
 	}
-	processTags, err := json.Marshal(span.Process.Tags)
+	processTags, err := json.Marshal(jsonSpan.Process.Tag)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +141,7 @@ func TransformSpanToCSV(span *model.Span) (io.Reader, error) {
 		span.OperationName,
 		string(references),
 		strconv.FormatUint(uint64(span.Flags), 10),
-		span.StartTime.Format(time.RFC3339),
+		span.StartTime.Format(time.RFC3339Nano),
 		value.Timespan{Value: span.Duration, Valid: true}.Marshal(),
 		string(tags),
 		string(logs),

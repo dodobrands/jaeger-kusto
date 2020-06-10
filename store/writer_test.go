@@ -33,6 +33,10 @@ func TestWriteSpan(tester *testing.T) {
 		},
 		StartTime: date,
 		Duration: 34252523*time.Millisecond,
+		Tags: []model.KeyValue{model.KeyValue{
+			Key:  "abc",
+			VStr: "sdf",
+		}},
 	}
 
 	config := InitConfig("")

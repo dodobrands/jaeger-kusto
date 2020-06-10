@@ -29,9 +29,7 @@ func (k KustoSpanWriter) WriteSpan(span *model.Span) error {
 	defer cancel()
 
 	spanReader, err := TransformSpanToCSV(span)
-	if err != nil {
-		return err
-	}
+
 
 	err = k.ingest.FromReader(ctx, spanReader, ingest.FileFormat(ingest.CSV))
 	if err != nil {
@@ -40,14 +38,5 @@ func (k KustoSpanWriter) WriteSpan(span *model.Span) error {
 
 	return err
 }
-
-func getTagsValues(tags []model.KeyValue) []string {
-	var values []string
-	for i := range tags {
-		values = append(values, tags[i].VStr)
-	}
-	return values
-}
-
 
 // TODO: make buffering for up to 4MB of spans
