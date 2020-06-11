@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/dodopizza/jaeger-kusto/store"
@@ -26,7 +27,7 @@ func main() {
 
 	kustoConfig := store.InitConfig(configPath)
 
-	logger.Warn(fmt.Sprintf("%#v", kustoConfig))
+	logger.Debug(fmt.Sprintf("%#v", kustoConfig))
 
 	kustoStore := store.NewStore(*kustoConfig, logger)
 	grpc.Serve(kustoStore)
