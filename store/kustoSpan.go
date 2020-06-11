@@ -2,11 +2,12 @@ package store
 
 import (
 	"encoding/json"
+	"strconv"
+	"time"
+
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/plugin/storage/es/spanstore/dbmodel"
-	"strconv"
-	"time"
 )
 
 type KustoSpan struct {
@@ -23,14 +24,13 @@ type KustoSpan struct {
 	ProcessTags        value.Dynamic `kusto:"ProcessTags"`
 	ProcessID          string        `kusto:"ProcessID"`
 }
+
 const (
 	//TagDotReplacementCharacter state which character should replace the dot in es
 	TagDotReplacementCharacter = "_"
 )
 
-
-func TransformKustoSpanToSpan(kustoSpan *KustoSpan) (*model.Span, error){
-
+func TransformKustoSpanToSpan(kustoSpan *KustoSpan) (*model.Span, error) {
 
 	var refs []dbmodel.Reference
 	err := json.Unmarshal(kustoSpan.References.Value, &refs)
@@ -50,12 +50,10 @@ func TransformKustoSpanToSpan(kustoSpan *KustoSpan) (*model.Span, error){
 		return nil, err
 	}
 
-	var process dbmodel.Process
-
-	process = dbmodel.Process{
+	process := dbmodel.Process{
 		ServiceName: kustoSpan.ProcessServiceName,
 		Tags:        nil,
-		Tag: nil,
+		Tag:         nil,
 	}
 
 	err = json.Unmarshal(kustoSpan.ProcessTags.Value, &process.Tag)
@@ -99,7 +97,6 @@ func TransformKustoSpanToSpan(kustoSpan *KustoSpan) (*model.Span, error){
 
 	return span, err
 }
-
 
 func getTagsValues(tags []model.KeyValue) []string {
 	var values []string
@@ -146,7 +143,6 @@ func TransformSpanToCSV(span *model.Span) ([]string, error) {
 		string(processTags),
 		span.ProcessID,
 	}
-
 
 	return kustoStringSpan, err
 }

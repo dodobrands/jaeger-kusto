@@ -4,31 +4,32 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/ingest"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/tushar2708/altcsv"
-	"time"
 )
 
 type KustoSpanWriter struct {
 	client *kusto.Client
 	ingest *ingest.Ingestion
-	ch chan []string
+	ch     chan []string
 	logger hclog.Logger
 }
 
 func NewKustoSpanWriter(client *kusto.Client, logger hclog.Logger) *KustoSpanWriter {
 
-	in, err := ingest.New(client, "jaeger","Spans")
+	in, err := ingest.New(client, "jaeger", "Spans")
 	if err != nil {
 		logger.Error(fmt.Sprintf("%#v", err))
 	}
 	ch := make(chan []string, 100)
 	writer := &KustoSpanWriter{client, in, ch, logger}
 
-	go writer.IngestCSV(ch)
+	go writer.ingestCSV(ch)
 
 	return writer
 }
@@ -41,9 +42,9 @@ func (k KustoSpanWriter) WriteSpan(span *model.Span) error {
 	return err
 }
 
-func (k KustoSpanWriter) IngestCSV (ch <-chan []string) {
+func (k KustoSpanWriter) ingestCSV(ch <-chan []string) {
 
-	ticker := time.NewTicker(5*time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 
 	b := &bytes.Buffer{}
 	writer := altcsv.NewWriter(b)
@@ -52,23 +53,25 @@ func (k KustoSpanWriter) IngestCSV (ch <-chan []string) {
 	for {
 		select {
 		case buf, ok := <-ch:
-			if ok != true{
+			if !ok {
 				return
 			}
 			if b.Len() > 1048576 {
-				IngestBatch(k, b)
+				ingestBatch(k, b)
 			}
-			writer.Write(buf)
+			err := writer.Write(buf)
+			if err != nil {
+				k.logger.Error("Failed to write csv" + err.Error())
+			}
 			writer.Flush()
 		case <-ticker.C:
-			IngestBatch(k, b)
+			ingestBatch(k, b)
 		}
 	}
-	return
 }
 
-func IngestBatch(k KustoSpanWriter, b *bytes.Buffer) {
-	if b.Len() == 0{
+func ingestBatch(k KustoSpanWriter, b *bytes.Buffer) {
+	if b.Len() == 0 {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -77,7 +80,6 @@ func IngestBatch(k KustoSpanWriter, b *bytes.Buffer) {
 	if err == nil {
 		b.Reset()
 	} else {
-		k.logger.Error(fmt.Sprintf("%#v", err))
+		k.logger.Error("Failed to ingest to Kusto" + err.Error())
 	}
 }
-

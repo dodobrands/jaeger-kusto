@@ -2,11 +2,11 @@ package store
 
 import (
 	"errors"
-	"github.com/jaegertracing/jaeger/model"
+
 	"github.com/jaegertracing/jaeger/storage/spanstore"
-	"time"
 )
 
+// taken from https://github.com/logzio/jaeger-logzio/blob/master/store/store.go
 var (
 	// ErrServiceNameNotSet occurs when attempting to query with an empty service name
 	ErrServiceNameNotSet = errors.New("Service Name must be set")
@@ -22,14 +22,9 @@ var (
 
 	// ErrStartAndEndTimeNotSet occurs when start time and end time are not set
 	ErrStartAndEndTimeNotSet = errors.New("Start and End Time must be set")
-
-	// ErrUnableToFindTraceIDAggregation occurs when an aggregation query for TraceIDs fail.
-	ErrUnableToFindTraceIDAggregation = errors.New("Could not find aggregation of traceIDs")
-
-	defaultMaxDuration = model.DurationAsMicroseconds(time.Hour * 24)
-
 )
 
+// taken from https://github.com/logzio/jaeger-logzio/blob/master/store/queryUtils.go
 func validateQuery(p *spanstore.TraceQueryParameters) error {
 	if p == nil {
 		return ErrMalformedRequestObject

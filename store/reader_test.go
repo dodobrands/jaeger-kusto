@@ -3,17 +3,15 @@ package store
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
-	"testing"
-	"time"
 )
-
-
-
 
 func TestKustoSpanReader_GetTrace(tester *testing.T) {
 	logger := hclog.New(&hclog.LoggerOptions{
@@ -22,8 +20,7 @@ func TestKustoSpanReader_GetTrace(tester *testing.T) {
 		JSONFormat: true,
 	})
 
-	trace, err := model.TraceIDFromString("7386639398c50144")
-
+	trace, err := model.TraceIDFromString("0232d7f26e2317b1")
 
 	config := InitConfig("")
 
@@ -106,9 +103,9 @@ func TestFindTraces(tester *testing.T) {
 	query := spanstore.TraceQueryParameters{
 		ServiceName:   "frontend",
 		OperationName: "",
-		StartTimeMin: time.Date(2020, time.June, 9, 17, 0, 0, 0, time.UTC),
-		StartTimeMax: time.Date(2020, time.June, 9, 18, 0, 0, 0, time.UTC),
-		NumTraces: 20,
+		StartTimeMin:  time.Date(2020, time.June, 10, 13, 0, 0, 0, time.UTC),
+		StartTimeMax:  time.Date(2020, time.June, 10, 14, 0, 0, 0, time.UTC),
+		NumTraces:     20,
 	}
 
 	logger := hclog.New(&hclog.LoggerOptions{

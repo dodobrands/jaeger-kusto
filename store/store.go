@@ -11,7 +11,6 @@ import (
 )
 
 type Store struct {
-	config KustoConfig
 	reader *KustoSpanReader
 	writer *KustoSpanWriter
 }
@@ -26,7 +25,6 @@ func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 	if err != nil {
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
-
 
 	reader := NewKustoSpanReader(client, logger)
 	writer := NewKustoSpanWriter(client, logger)
