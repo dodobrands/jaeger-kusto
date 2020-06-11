@@ -6,96 +6,68 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/hashicorp/go-hclog"
+
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 )
 
-func TestKustoSpanReader_GetTrace(tester *testing.T) {
-	logger := hclog.New(&hclog.LoggerOptions{
+var (
+	logger = hclog.New(&hclog.LoggerOptions{
 		Level:      hclog.Debug,
-		Name:       "jaeger-kusto-test",
+		Name:       "jaeger-kusto-tests",
 		JSONFormat: true,
 	})
+)
 
-	trace, err := model.TraceIDFromString("0232d7f26e2317b1")
+const testConfigPath = ".././jaeger-kusto-config.json"
 
-	config := InitConfig("")
+func TestKustoSpanReader_GetTrace(tester *testing.T) {
 
-	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
-	}
-
-	client, err := kusto.New(config.Endpoint, authorizer)
-	if err != nil {
-		panic("add error handling")
-	}
-
-	reader := NewKustoSpanReader(client, logger)
+	testConfig := InitConfig(testConfigPath, logger)
+	kustoStore := NewStore(*testConfig, logger)
+	trace, _ := model.TraceIDFromString("0232d7f26e2317b1")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	fulltrace, err := reader.GetTrace(ctx, trace)
+	fulltrace, err := kustoStore.reader.GetTrace(ctx, trace)
+	if err != nil {
+		logger.Error("can't get trace", err.Error())
+	}
 	fmt.Printf("%+v\n", fulltrace)
 }
 
 func TestKustoSpanReader_GetServices(t *testing.T) {
-	logger := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Name:       "jaeger-kusto-test",
-		JSONFormat: true,
-	})
 
-	config := InitConfig("")
-
-	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
-	}
-
-	client, err := kusto.New(config.Endpoint, authorizer)
-	if err != nil {
-		panic("add error handling")
-	}
-
-	reader := NewKustoSpanReader(client, logger)
+	testConfig := InitConfig(testConfigPath, logger)
+	kustoStore := NewStore(*testConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	services, err := reader.GetServices(ctx)
+	services, err := kustoStore.reader.GetServices(ctx)
+	if err != nil {
+		logger.Error("can't get services", err.Error())
+	}
 	fmt.Printf("%+v\n", services)
 }
 
 func TestKustoSpanReader_GetOperations(t *testing.T) {
-	logger := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Name:       "jaeger-kusto-test",
-		JSONFormat: true,
-	})
 
-	config := InitConfig("")
-
-	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
-	}
-
-	client, err := kusto.New(config.Endpoint, authorizer)
-	if err != nil {
-		panic("add error handling")
-	}
-
-	reader := NewKustoSpanReader(client, logger)
+	testConfig := InitConfig(testConfigPath, logger)
+	kustoStore := NewStore(*testConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	operations, err := reader.GetOperations(ctx, spanstore.OperationQueryParameters{
+	operations, err := kustoStore.reader.GetOperations(ctx, spanstore.OperationQueryParameters{
 		ServiceName: "frontend",
 		SpanKind:    "",
 	})
+	if err != nil {
+		logger.Error("can't get operations", err.Error())
+	}
 	fmt.Printf("%+v\n", operations)
 }
 
@@ -108,29 +80,16 @@ func TestFindTraces(tester *testing.T) {
 		NumTraces:     20,
 	}
 
-	logger := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Name:       "jaeger-kusto-test",
-		JSONFormat: true,
-	})
-
-	config := InitConfig("")
-
-	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
-	}
-
-	client, err := kusto.New(config.Endpoint, authorizer)
-	if err != nil {
-		panic("add error handling")
-	}
-
-	reader := NewKustoSpanReader(client, logger)
+	testConfig := InitConfig(testConfigPath, logger)
+	kustoStore := NewStore(*testConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	traces, err := reader.FindTraces(ctx, &query)
+	traces, err := kustoStore.reader.FindTraces(ctx, &query)
+	if err != nil {
+		logger.Error("can't find traces", err.Error())
+	}
 	fmt.Printf("%+v\n", traces)
 
 }

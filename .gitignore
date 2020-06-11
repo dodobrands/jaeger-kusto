@@ -19,4 +19,4 @@ jaeger-kusto
 
 .idea/
 
-docker-compose.yml
+jaeger-kusto-config.json

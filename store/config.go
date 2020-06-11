@@ -1,18 +1,10 @@
 package store
 
 import (
-	"fmt"
-	"path"
+	"io/ioutil"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/viper"
-)
-
-const (
-	clientId     = "CLIENT_ID"
-	clientSecret = "CLIENT_SECRET"
-	tenantId     = "TENANT_ID"
-	endpoint     = "ENDPOINT"
-	database     = "DATABASE"
 )
 
 type KustoConfig struct {
@@ -23,27 +15,40 @@ type KustoConfig struct {
 	Database     string
 }
 
-func InitConfig(configPath string) *KustoConfig {
+func InitConfig(configPath string, logger hclog.Logger) *KustoConfig {
+
 	var kustoConfig *KustoConfig
+
 	v := viper.New()
+
 	if configPath != "" {
-		v.SetConfigFile(path.Base(configPath))
-		v.AddConfigPath(path.Dir(configPath))
-		//viper.SetConfigName("config")
-		v.SetConfigType("yaml")
-		err := v.ReadInConfig() // Find and read the config file
-		if err != nil {         // Handle errors reading the config file
-			panic(fmt.Errorf("Fatal error config file: %s \n", err))
+		logger.Debug("trying to read config file")
+		logger.Debug("configPath is " + configPath)
+
+		f, err := ioutil.ReadFile(configPath)
+
+		if err != nil { // Handle errors reading the config file
+			logger.Error("error reading config file", err.Error())
+		}
+		logger.Debug("file contents:" + string(f))
+
+		logger.Debug("initializing Kusto storage")
+
+		v.SetConfigFile(configPath)
+		v.SetConfigType("json")
+		err = v.ReadInConfig() // Find and read the config file
+		if err != nil {        // Handle errors reading the config file
+			logger.Error("error reading config file", err.Error())
 		}
 	}
 	v.AutomaticEnv()
 
 	kustoConfig = &KustoConfig{
-		ClientID:     v.GetString(clientId),
-		ClientSecret: v.GetString(clientSecret),
-		TenantID:     v.GetString(tenantId),
-		Endpoint:     v.GetString(endpoint),
-		Database:     v.GetString(database),
+		ClientID:     v.GetString("clientId"),
+		ClientSecret: v.GetString("clientSecret"),
+		TenantID:     v.GetString("tenantId"),
+		Endpoint:     v.GetString("endpoint"),
+		Database:     v.GetString("database"),
 	}
 
 	return kustoConfig

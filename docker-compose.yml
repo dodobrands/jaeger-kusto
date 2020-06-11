@@ -3,7 +3,7 @@ services:
   jaeger:
     build:
       context: .
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "5775:5775/udp"
       - "6831:6831/udp"
@@ -12,20 +12,18 @@ services:
       - "16686:16686"
       - "14268:14268"
       - "14250:14250"
+    volumes: 
+      - "./jaeger-kusto-config.json:/config/jaeger-kusto-config.json"
     environment:
       "SPAN_STORAGE_TYPE": "grpc-plugin"
-      "GRPC_STORAGE_PLUGIN_BINARY": "/go/bin/jaeger-kusto"
-      "CLIENT_ID": ""
-      "CLIENT_SECRET": ""
-      "TENANT_ID": ""
-      "ENDPOINT": ""
-      "DATABASE": "jaeger"
-    command: "--log-level debug"
+    command: 
+      - "--grpc-storage-plugin.binary=/go/bin/jaeger-kusto"
+      - "--grpc-storage-plugin.configuration-file=/config/jaeger-kusto-config.json"
   hotrod:
     image: jaegertracing/example-hotrod:latest
     ports:
       - "8080-8083:8080-8083"
-    restart: unless-stopped
+    restart: "no"
     environment:
       "JAEGER_AGENT_HOST": "jaeger"
       "JAEGER_AGENT_PORT": "6831"

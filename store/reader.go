@@ -3,13 +3,14 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
 	"github.com/Azure/azure-kusto-go/kusto/data/types"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
-	"time"
 )
 
 type KustoSpanReader struct {
@@ -31,7 +32,7 @@ func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 			kusto.ParamTypes{
 				"ParamTraceID": kusto.ParamType{Type: types.String},
 			},
-		),).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
+		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
 
 	iter, err := r.client.Query(ctx, JaegerDatabase, kustoStmt)
 	if err != nil {
@@ -94,7 +95,7 @@ func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 
 	type Operation struct {
 		OperationName string `kusto:"OperationName"`
-		SpanKind string `kusto:"SpanKind"`
+		SpanKind      string `kusto:"SpanKind"`
 	}
 
 	var kustoStmt kusto.Stmt
@@ -115,7 +116,7 @@ func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 				kusto.ParamTypes{
 					"ParamProcessServiceName": kusto.ParamType{Type: types.String},
 				},
-			),).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamProcessServiceName": query.ServiceName}))
+			)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamProcessServiceName": query.ServiceName}))
 	}
 
 	iter, err := r.client.Query(ctx, JaegerDatabase, kustoStmt)
@@ -146,7 +147,6 @@ func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 	return operations, err
 }
 
-
 func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryParameters) ([]model.TraceID, error) {
 
 	if err := validateQuery(query); err != nil {
@@ -161,20 +161,21 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
-	if query.ServiceName != ""  {
+	if query.ServiceName != "" {
 		kustoStmt = kustoStmt.Add(` | where ProcessServiceName == ParamProcessServiceName`)
 		kustoDefinitions["ParamProcessServiceName"] = kusto.ParamType{Type: types.String}
 		kustoParameters["ParamProcessServiceName"] = query.ServiceName
 	}
 
-	if query.OperationName != ""  {
+	if query.OperationName != "" {
 		kustoStmt = kustoStmt.Add(` | where OperationName == ParamOperationName`)
 		kustoDefinitions["ParamOperationName"] = kusto.ParamType{Type: types.String}
 		kustoParameters["ParamOperationName"] = query.OperationName
 	}
 
-	if query.Tags != nil  {
+	if query.Tags != nil {
 		//TODO: not implemented
+		kustoStmt = kustoStmt.Add(``)
 	}
 
 	// StartTimeMin
@@ -187,13 +188,13 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
 
-	if query.DurationMin != 0  {
+	if query.DurationMin != 0 {
 		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMin`)
 		kustoDefinitions["ParamDurationMin"] = kusto.ParamType{Type: types.Timespan}
 		kustoParameters["ParamDurationMin"] = query.DurationMin
 	}
 
-	if query.DurationMax != 0  {
+	if query.DurationMax != 0 {
 		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMax`)
 		kustoDefinitions["ParamDurationMax"] = kusto.ParamType{Type: types.Timespan}
 		kustoParameters["ParamDurationMax"] = query.DurationMax
@@ -202,7 +203,7 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	// Last aggregation
 	kustoStmt = kustoStmt.Add("| summarize by TraceID")
 
-	if query.NumTraces != 0  {
+	if query.NumTraces != 0 {
 		kustoStmt.Add(`| sample ParamNumTraces`)
 		kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
 		kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
@@ -248,20 +249,22 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
-	if query.ServiceName != ""  {
+	if query.ServiceName != "" {
 		kustoStmt = kustoStmt.Add(` | where ProcessServiceName == ParamProcessServiceName`)
 		kustoDefinitions["ParamProcessServiceName"] = kusto.ParamType{Type: types.String}
 		kustoParameters["ParamProcessServiceName"] = query.ServiceName
 	}
 
-	if query.OperationName != ""  {
+	if query.OperationName != "" {
 		kustoStmt = kustoStmt.Add(` | where OperationName == ParamOperationName`)
 		kustoDefinitions["ParamOperationName"] = kusto.ParamType{Type: types.String}
 		kustoParameters["ParamOperationName"] = query.OperationName
 	}
 
-	if query.Tags != nil  {
+	if query.Tags != nil {
 		//TODO: not implemented
+		kustoStmt = kustoStmt.Add(``)
+
 	}
 
 	// StartTimeMin
@@ -274,13 +277,13 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
 
-	if query.DurationMin != 0  {
+	if query.DurationMin != 0 {
 		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMin`)
 		kustoDefinitions["ParamDurationMin"] = kusto.ParamType{Type: types.Timespan}
 		kustoParameters["ParamDurationMin"] = query.DurationMin
 	}
 
-	if query.DurationMax != 0  {
+	if query.DurationMax != 0 {
 		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMax`)
 		kustoDefinitions["ParamDurationMax"] = kusto.ParamType{Type: types.Timespan}
 		kustoParameters["ParamDurationMax"] = query.DurationMax

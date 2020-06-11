@@ -6,4 +6,4 @@ RUN apk add --update --no-cache ca-certificates
 ENV SPAN_STORAGE_TYPE grpc-plugin
 ENV GRPC_STORAGE_PLUGIN_BINARY "/go/bin/jaeger-kusto"
 COPY ./jaeger-kusto /go/bin/
-ENTRYPOINT /go/bin/collector-linux
+ENTRYPOINT [ "/go/bin/collector-linux" ]

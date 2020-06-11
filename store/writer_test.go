@@ -1,12 +1,12 @@
 package store
 
 import (
-	"github.com/Azure/azure-kusto-go/kusto"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
-	"github.com/hashicorp/go-hclog"
-	"github.com/jaegertracing/jaeger/model"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/jaegertracing/jaeger/model"
 )
 
 const (
@@ -14,13 +14,7 @@ const (
 	testService   = "testService"
 )
 
-
 func TestWriteSpan(tester *testing.T) {
-	logger := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Name:       "jaeger-kusto-test",
-		JSONFormat: true,
-	})
 
 	date, _ := time.Parse(time.RFC3339, "1990-12-02T16:50:41+00:00")
 	span := &model.Span{
@@ -31,7 +25,7 @@ func TestWriteSpan(tester *testing.T) {
 			ServiceName: testService,
 		},
 		StartTime: date,
-		Duration: 34523*time.Millisecond,
+		Duration:  34523 * time.Millisecond,
 		Tags: []model.KeyValue{model.KeyValue{
 			Key:  "abc",
 			VStr: "sdf",
@@ -46,7 +40,7 @@ func TestWriteSpan(tester *testing.T) {
 			ServiceName: testService,
 		},
 		StartTime: date,
-		Duration: 34242*time.Millisecond,
+		Duration:  34242 * time.Millisecond,
 		Tags: []model.KeyValue{model.KeyValue{
 			Key:  "rty",
 			VStr: "fgh",
@@ -61,28 +55,17 @@ func TestWriteSpan(tester *testing.T) {
 			ServiceName: testService,
 		},
 		StartTime: date,
-		Duration: 12121*time.Millisecond,
+		Duration:  12121 * time.Millisecond,
 		Tags: []model.KeyValue{model.KeyValue{
 			Key:  "qwe",
 			VStr: "zxc",
 		}},
 	}
 
-	config := InitConfig("")
-
-	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
-	}
-
-	client, err := kusto.New(config.Endpoint, authorizer)
-	if err != nil {
-		panic("add error handling")
-	}
-
-	writer := NewKustoSpanWriter(client, logger)
-
-	writer.WriteSpan(span)
-	writer.WriteSpan(span2)
-	writer.WriteSpan(span3)
+	testConfig := InitConfig(testConfigPath, logger)
+	kustoStore := NewStore(*testConfig, logger)
+	assert.Error(tester, kustoStore.writer.WriteSpan(span))
+	assert.Error(tester, kustoStore.writer.WriteSpan(span2))
+	assert.Error(tester, kustoStore.writer.WriteSpan(span3))
 
 }

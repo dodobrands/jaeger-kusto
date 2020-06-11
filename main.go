@@ -2,11 +2,9 @@ package main
 
 import (
 	"flag"
-	"fmt"
-
-	"github.com/hashicorp/go-hclog"
 
 	"github.com/dodopizza/jaeger-kusto/store"
+	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc"
 )
 
@@ -18,16 +16,12 @@ func main() {
 		JSONFormat: true,
 	})
 
-	logger.Info("Initializing Kusto storage")
-
 	var configPath string
 
 	flag.StringVar(&configPath, "config", "", "A path to the plugin's configuration file")
 	flag.Parse()
 
-	kustoConfig := store.InitConfig(configPath)
-
-	logger.Debug(fmt.Sprintf("%#v", kustoConfig))
+	kustoConfig := store.InitConfig(configPath, logger)
 
 	kustoStore := store.NewStore(*kustoConfig, logger)
 	grpc.Serve(kustoStore)

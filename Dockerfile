@@ -1,4 +1,4 @@
-FROM jaegertracing/all-in-one:latest as jaeger
+FROM jaegertracing/all-in-one:1.18 as jaeger
 FROM golang:1.14-alpine as build
 RUN apk --no-cache add ca-certificates
 
@@ -17,4 +17,4 @@ COPY --from=build /build/jaeger-kusto /go/bin/jaeger-kusto
 ENV SPAN_STORAGE_TYPE grpc-plugin
 ENV GRPC_STORAGE_PLUGIN_BINARY "/go/bin/jaeger-kusto"
 
-ENTRYPOINT /go/bin/all-in-one-linux
+ENTRYPOINT [ "/go/bin/all-in-one-linux" ]
