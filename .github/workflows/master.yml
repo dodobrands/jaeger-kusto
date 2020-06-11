@@ -1,4 +1,4 @@
-name: Build
+name: master
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 jobs:
   golangci-lint:
     if: "!contains(github.event.head_commit.message, 'skip ci')"
-    name: lint
+    name: golangci-lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
