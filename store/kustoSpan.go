@@ -26,7 +26,7 @@ type KustoSpan struct {
 }
 
 const (
-	//TagDotReplacementCharacter state which character should replace the dot in es
+	//TagDotReplacementCharacter state which character should replace the dot in dynamic column
 	TagDotReplacementCharacter = "_"
 )
 
@@ -106,8 +106,8 @@ func getTagsValues(tags []model.KeyValue) []string {
 	return values
 }
 
-// Transforms Jaeger span to CSV
-func TransformSpanToCSV(span *model.Span) ([]string, error) {
+// TransformSpanToStringArray converts span to string ready for Kusto ingestion
+func TransformSpanToStringArray(span *model.Span) ([]string, error) {
 
 	spanConverter := dbmodel.NewFromDomain(true, getTagsValues(span.Tags), TagDotReplacementCharacter)
 	jsonSpan := spanConverter.FromDomainEmbedProcess(span)

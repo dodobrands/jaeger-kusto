@@ -20,9 +20,9 @@ type KustoSpanWriter struct {
 	logger hclog.Logger
 }
 
-func NewKustoSpanWriter(client *kusto.Client, logger hclog.Logger) *KustoSpanWriter {
+func NewKustoSpanWriter(client *kusto.Client, logger hclog.Logger, database string) *KustoSpanWriter {
 
-	in, err := ingest.New(client, "jaeger", "Spans")
+	in, err := ingest.New(client, database, "Spans")
 	if err != nil {
 		logger.Error(fmt.Sprintf("%#v", err))
 	}
@@ -34,9 +34,10 @@ func NewKustoSpanWriter(client *kusto.Client, logger hclog.Logger) *KustoSpanWri
 	return writer
 }
 
+// WriteSpan sends span to buffer
 func (k KustoSpanWriter) WriteSpan(span *model.Span) error {
 
-	spanStringArray, err := TransformSpanToCSV(span)
+	spanStringArray, err := TransformSpanToStringArray(span)
 
 	k.ch <- spanStringArray
 	return err

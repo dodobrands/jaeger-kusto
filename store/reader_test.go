@@ -78,6 +78,9 @@ func TestFindTraces(tester *testing.T) {
 		StartTimeMin:  time.Date(2020, time.June, 10, 13, 0, 0, 0, time.UTC),
 		StartTimeMax:  time.Date(2020, time.June, 10, 14, 0, 0, 0, time.UTC),
 		NumTraces:     20,
+		Tags: map[string]string{
+			"http_method": "GET",
+		},
 	}
 
 	testConfig := InitConfig(testConfigPath, logger)
@@ -92,4 +95,14 @@ func TestFindTraces(tester *testing.T) {
 	}
 	fmt.Printf("%+v\n", traces)
 
+}
+
+func TestStore_DependencyReader(t *testing.T) {
+	testConfig := InitConfig(testConfigPath, logger)
+	kustoStore := NewStore(*testConfig, logger)
+	dependencyLinks, err := kustoStore.reader.GetDependencies(time.Now(), 168*time.Hour)
+	if err != nil {
+		logger.Error("can't find dependencyLinks", err.Error())
+	}
+	fmt.Printf("%+v\n", dependencyLinks)
 }

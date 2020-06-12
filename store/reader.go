@@ -2,8 +2,13 @@ package store
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"strings"
 	"time"
+
+	"github.com/Azure/azure-kusto-go/kusto/data/value"
+
+	"github.com/Azure/azure-kusto-go/kusto/unsafe"
 
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
@@ -14,17 +19,24 @@ import (
 )
 
 type KustoSpanReader struct {
-	client *kusto.Client
+	client   *kusto.Client
+	database string
 }
 
-func NewKustoSpanReader(client *kusto.Client, logger hclog.Logger) *KustoSpanReader {
-	reader := &KustoSpanReader{client}
+// NewKustoSpanReader creates new kusto span reader
+func NewKustoSpanReader(client *kusto.Client, logger hclog.Logger, database string) *KustoSpanReader {
+	reader := &KustoSpanReader{client, database}
 	return reader
 }
 
-const JaegerDatabase = "jaeger"
 const defaultNumTraces = 20
 
+var safetySwitch = unsafe.Stmt{
+	Add:             true,
+	SuppressWarning: true,
+}
+
+// GetTrace finds trace by TraceID
 func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
 
 	kustoStmt := kusto.NewStmt("Spans | where TraceID == ParamTraceID").MustDefinitions(
@@ -34,7 +46,7 @@ func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
 
-	iter, err := r.client.Query(ctx, JaegerDatabase, kustoStmt)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +74,9 @@ func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 	return &trace, err
 }
 
+// GetServices finds all possible services that spanstore contains
 func (r *KustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
-	iter, err := r.client.Query(ctx, JaegerDatabase, kusto.NewStmt("Spans | summarize count() by ProcessServiceName | sort by count_ | project ProcessServiceName"))
+	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("Spans | summarize count() by ProcessServiceName | sort by count_ | project ProcessServiceName"))
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +104,7 @@ func (r *KustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 	return services, err
 }
 
+// GetOperations finds all operations by provided Service and SpanKind
 func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.OperationQueryParameters) ([]spanstore.Operation, error) {
 
 	type Operation struct {
@@ -119,7 +133,7 @@ func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 			)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamProcessServiceName": query.ServiceName}))
 	}
 
-	iter, err := r.client.Query(ctx, JaegerDatabase, kustoStmt)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +161,7 @@ func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 	return operations, err
 }
 
+// FindTraceIDs finds TraceIDs by provided query
 func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryParameters) ([]model.TraceID, error) {
 
 	if err := validateQuery(query); err != nil {
@@ -157,7 +172,7 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		TraceID string `kusto:"TraceID"`
 	}
 
-	kustoStmt := kusto.NewStmt("Spans")
+	kustoStmt := kusto.NewStmt("Spans", kusto.UnsafeStmt(safetySwitch))
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -174,16 +189,17 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	}
 
 	if query.Tags != nil {
-		//TODO: not implemented
-		kustoStmt = kustoStmt.Add(``)
+		for k, v := range query.Tags {
+			replacedTag := strings.Replace(k, ".", TagDotReplacementCharacter, -1)
+			tagFilter := fmt.Sprintf(" | where Tags.%s == '%s' or ProcessTags.%s == '%s'", replacedTag, v, replacedTag, v)
+			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
+		}
 	}
 
-	// StartTimeMin
 	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
 	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMin"] = query.StartTimeMin
 
-	// StartTimeMax
 	kustoStmt = kustoStmt.Add(` | where StartTime < ParamStartTimeMax`)
 	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
@@ -200,7 +216,6 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		kustoParameters["ParamDurationMax"] = query.DurationMax
 	}
 
-	// Last aggregation
 	kustoStmt = kustoStmt.Add("| summarize by TraceID")
 
 	if query.NumTraces != 0 {
@@ -211,7 +226,7 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 
 	kustoStmt = kustoStmt.MustDefinitions(kusto.NewDefinitions().Must(kustoDefinitions)).MustParameters(kusto.NewParameters().Must(kustoParameters))
 
-	iter, err := r.client.Query(ctx, JaegerDatabase, kustoStmt)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -224,8 +239,8 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 			if err := row.ToStruct(&rec); err != nil {
 				return err
 			}
-			traceId, err := model.TraceIDFromString(rec.TraceID)
-			traceIds = append(traceIds, traceId)
+			traceID, err := model.TraceIDFromString(rec.TraceID)
+			traceIds = append(traceIds, traceID)
 			return err
 		},
 	)
@@ -236,6 +251,7 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	return traceIds, err
 }
 
+// FindTraces finds and returns full traces with spans
 func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
 	if err := validateQuery(query); err != nil {
 		return nil, err
@@ -245,7 +261,7 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		query.NumTraces = defaultNumTraces
 	}
 
-	kustoStmt := kusto.NewStmt("set truncationmaxsize=268435456; let TraceIDs = (Spans")
+	kustoStmt := kusto.NewStmt("let TraceIDs = (Spans", kusto.UnsafeStmt(safetySwitch))
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -262,17 +278,17 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	}
 
 	if query.Tags != nil {
-		//TODO: not implemented
-		kustoStmt = kustoStmt.Add(``)
-
+		for k, v := range query.Tags {
+			replacedTag := strings.Replace(k, ".", TagDotReplacementCharacter, -1)
+			tagFilter := fmt.Sprintf(" | where Tags.%s == '%s' or ProcessTags.%s == '%s'", replacedTag, v, replacedTag, v)
+			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
+		}
 	}
 
-	// StartTimeMin
 	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
 	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMin"] = query.StartTimeMin
 
-	// StartTimeMax
 	kustoStmt = kustoStmt.Add(` | where StartTime < ParamStartTimeMax`)
 	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
@@ -289,7 +305,6 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		kustoParameters["ParamDurationMax"] = query.DurationMax
 	}
 
-	// Last aggregation
 	kustoStmt = kustoStmt.Add(" | summarize by TraceID")
 
 	kustoStmt = kustoStmt.Add(` | sample ParamNumTraces`)
@@ -298,12 +313,10 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	kustoStmt = kustoStmt.Add("); Spans")
 
-	// StartTimeMin
 	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
 	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMin"] = query.StartTimeMin
 
-	// StartTimeMax
 	kustoStmt = kustoStmt.Add(` | where StartTime < ParamStartTimeMax`)
 	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
@@ -312,7 +325,7 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	kustoStmt = kustoStmt.MustDefinitions(kusto.NewDefinitions().Must(kustoDefinitions)).MustParameters(kusto.NewParameters().Must(kustoParameters))
 
-	iter, err := r.client.Query(ctx, JaegerDatabase, kustoStmt)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -349,6 +362,57 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	return traces, err
 }
 
+// GetDependencies returns DependencyLinks of services
 func (r *KustoSpanReader) GetDependencies(endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
-	return nil, errors.New("not implemented")
+
+	type kustoDependencyLink struct {
+		Parent    string     `kusto:"Parent"`
+		Child     string     `kusto:"Child"`
+		CallCount value.Long `kusto:"CallCount"`
+	}
+
+	kustoStmt := kusto.NewStmt(`Spans
+| where StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
+| project ProcessServiceName, SpanID, ChildOfSpanId = tostring(References[0].spanID)
+| join (Spans | project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId
+| where ProcessServiceName != ParentService
+| extend Call=pack('Parent', ParentService, 'Child', ProcessServiceName)
+| summarize CallCount=count() by tostring(Call)
+| extend Call=parse_json(Call)
+| evaluate bag_unpack(Call)`).MustDefinitions(
+		kusto.NewDefinitions().Must(
+			kusto.ParamTypes{
+				"ParamEndTs":    kusto.ParamType{Type: types.DateTime},
+				"ParamLookBack": kusto.ParamType{Type: types.Timespan},
+			},
+		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Stop()
+
+	var dependencyLinks []model.DependencyLink
+	err = iter.Do(
+		func(row *table.Row) error {
+			rec := kustoDependencyLink{}
+			if err := row.ToStruct(&rec); err != nil {
+				return err
+			}
+
+			dependencyLinks = append(dependencyLinks, model.DependencyLink{
+				Parent:    rec.Parent,
+				Child:     rec.Child,
+				CallCount: uint64(rec.CallCount.Value),
+			})
+			return nil
+		},
+	)
+
+	return dependencyLinks, err
+
 }

@@ -8,11 +8,13 @@ import (
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 )
 
+// Store has reader and writer
 type Store struct {
 	reader *KustoSpanReader
 	writer *KustoSpanWriter
 }
 
+// NewStore creates new Kusto store for Jaeger span storage
 func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 
 	authorizer := kusto.Authorization{
@@ -25,8 +27,8 @@ func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 		panic("cant create Kusto client")
 	}
 
-	reader := NewKustoSpanReader(client, logger)
-	writer := NewKustoSpanWriter(client, logger)
+	reader := NewKustoSpanReader(client, logger, config.Database)
+	writer := NewKustoSpanWriter(client, logger, config.Database)
 	store := &Store{
 		reader: reader,
 		writer: writer,
@@ -35,14 +37,17 @@ func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 	return store
 }
 
+// DependencyReader returns created kusto store
 func (store *Store) DependencyReader() dependencystore.Reader {
 	return store.reader
 }
 
+// SpanReader returns created kusto store
 func (store *Store) SpanReader() spanstore.Reader {
 	return store.reader
 }
 
+// SpanWriter returns created kusto store
 func (store *Store) SpanWriter() spanstore.Writer {
 	return store.writer
 }
