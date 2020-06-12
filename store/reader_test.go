@@ -31,7 +31,7 @@ func TestKustoSpanReader_GetTrace(tester *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	fulltrace, err := kustoStore.reader.GetTrace(ctx, trace)
+	fulltrace, err := kustoStore.SpanReader().GetTrace(ctx, trace)
 	if err != nil {
 		logger.Error("can't get trace", err.Error())
 	}
@@ -46,7 +46,7 @@ func TestKustoSpanReader_GetServices(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	services, err := kustoStore.reader.GetServices(ctx)
+	services, err := kustoStore.SpanReader().GetServices(ctx)
 	if err != nil {
 		logger.Error("can't get services", err.Error())
 	}
@@ -61,7 +61,7 @@ func TestKustoSpanReader_GetOperations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	operations, err := kustoStore.reader.GetOperations(ctx, spanstore.OperationQueryParameters{
+	operations, err := kustoStore.SpanReader().GetOperations(ctx, spanstore.OperationQueryParameters{
 		ServiceName: "frontend",
 		SpanKind:    "",
 	})
@@ -89,7 +89,7 @@ func TestFindTraces(tester *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	traces, err := kustoStore.reader.FindTraces(ctx, &query)
+	traces, err := kustoStore.SpanReader().FindTraces(ctx, &query)
 	if err != nil {
 		logger.Error("can't find traces", err.Error())
 	}
@@ -100,7 +100,7 @@ func TestFindTraces(tester *testing.T) {
 func TestStore_DependencyReader(t *testing.T) {
 	testConfig := InitConfig(testConfigPath, logger)
 	kustoStore := NewStore(*testConfig, logger)
-	dependencyLinks, err := kustoStore.reader.GetDependencies(time.Now(), 168*time.Hour)
+	dependencyLinks, err := kustoStore.DependencyReader().GetDependencies(time.Now(), 168*time.Hour)
 	if err != nil {
 		logger.Error("can't find dependencyLinks", err.Error())
 	}
