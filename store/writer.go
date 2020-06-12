@@ -4,38 +4,40 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/ingest"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/tushar2708/altcsv"
 )
 
-type KustoSpanWriter struct {
-	client *kusto.Client
-	ingest *ingest.Ingestion
+type kustoIngest interface {
+	FromReader(ctx context.Context, reader io.Reader, options ...ingest.FileOption) error
+}
+
+type kustoSpanWriter struct {
+	ingest kustoIngest
 	ch     chan []string
 	logger hclog.Logger
 }
 
-func NewKustoSpanWriter(client *kusto.Client, logger hclog.Logger, database string) *KustoSpanWriter {
+func NewKustoSpanWriter(client *kustoFactory, logger hclog.Logger, database string) *kustoSpanWriter {
 
-	in, err := ingest.New(client, database, "Spans")
+	in, err := client.Ingest(database)
 	if err != nil {
 		logger.Error(fmt.Sprintf("%#v", err))
 	}
 	ch := make(chan []string, 100)
-	writer := &KustoSpanWriter{client, in, ch, logger}
+	writer := &kustoSpanWriter{in, ch, logger}
 
 	go writer.ingestCSV(ch)
 
 	return writer
 }
 
-// WriteSpan sends span to buffer
-func (k KustoSpanWriter) WriteSpan(span *model.Span) error {
+func (k kustoSpanWriter) WriteSpan(span *model.Span) error {
 
 	spanStringArray, err := TransformSpanToStringArray(span)
 
@@ -43,7 +45,7 @@ func (k KustoSpanWriter) WriteSpan(span *model.Span) error {
 	return err
 }
 
-func (k KustoSpanWriter) ingestCSV(ch <-chan []string) {
+func (k kustoSpanWriter) ingestCSV(ch <-chan []string) {
 
 	ticker := time.NewTicker(5 * time.Second)
 
@@ -71,7 +73,7 @@ func (k KustoSpanWriter) ingestCSV(ch <-chan []string) {
 	}
 }
 
-func ingestBatch(k KustoSpanWriter, b *bytes.Buffer) {
+func ingestBatch(k kustoSpanWriter, b *bytes.Buffer) {
 	if b.Len() == 0 {
 		return
 	}

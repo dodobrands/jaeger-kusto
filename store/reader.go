@@ -13,19 +13,21 @@ import (
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
 	"github.com/Azure/azure-kusto-go/kusto/data/types"
-	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 )
 
-type KustoSpanReader struct {
-	client   *kusto.Client
+type kustoSpanReader struct {
+	client   kustoReaderClient
 	database string
 }
 
-// NewKustoSpanReader creates new kusto span reader
-func NewKustoSpanReader(client *kusto.Client, logger hclog.Logger, database string) *KustoSpanReader {
-	reader := &KustoSpanReader{client, database}
+type kustoReaderClient interface {
+	Query(ctx context.Context, db string, query kusto.Stmt, options ...kusto.QueryOption) (*kusto.RowIterator, error)
+}
+
+func newKustoSpanReader(client *kustoFactory, database string) *kustoSpanReader {
+	reader := &kustoSpanReader{client.Reader(), database}
 	return reader
 }
 
@@ -37,7 +39,7 @@ var safetySwitch = unsafe.Stmt{
 }
 
 // GetTrace finds trace by TraceID
-func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
+func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
 
 	kustoStmt := kusto.NewStmt("Spans | where TraceID == ParamTraceID").MustDefinitions(
 		kusto.NewDefinitions().Must(
@@ -75,7 +77,7 @@ func (r *KustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 }
 
 // GetServices finds all possible services that spanstore contains
-func (r *KustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
+func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("Spans | summarize count() by ProcessServiceName | sort by count_ | project ProcessServiceName"))
 	if err != nil {
 		return nil, err
@@ -105,7 +107,7 @@ func (r *KustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 }
 
 // GetOperations finds all operations by provided Service and SpanKind
-func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.OperationQueryParameters) ([]spanstore.Operation, error) {
+func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.OperationQueryParameters) ([]spanstore.Operation, error) {
 
 	type Operation struct {
 		OperationName string `kusto:"OperationName"`
@@ -162,7 +164,7 @@ func (r *KustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 }
 
 // FindTraceIDs finds TraceIDs by provided query
-func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryParameters) ([]model.TraceID, error) {
+func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryParameters) ([]model.TraceID, error) {
 
 	if err := validateQuery(query); err != nil {
 		return nil, err
@@ -252,7 +254,7 @@ func (r *KustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 }
 
 // FindTraces finds and returns full traces with spans
-func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
+func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.TraceQueryParameters) ([]*model.Trace, error) {
 	if err := validateQuery(query); err != nil {
 		return nil, err
 	}
@@ -363,7 +365,7 @@ func (r *KustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 }
 
 // GetDependencies returns DependencyLinks of services
-func (r *KustoSpanReader) GetDependencies(endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
+func (r *kustoSpanReader) GetDependencies(endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
 
 	type kustoDependencyLink struct {
 		Parent    string     `kusto:"Parent"`
