@@ -6,16 +6,16 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/storage/dependencystore"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
+	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 )
 
-// Store has reader and writer
-type Store struct {
+type store struct {
 	reader *KustoSpanReader
 	writer *KustoSpanWriter
 }
 
 // NewStore creates new Kusto store for Jaeger span storage
-func NewStore(config KustoConfig, logger hclog.Logger) *Store {
+func NewStore(config KustoConfig, logger hclog.Logger) shared.StoragePlugin {
 
 	authorizer := kusto.Authorization{
 		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
@@ -29,7 +29,7 @@ func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 
 	reader := NewKustoSpanReader(client, logger, config.Database)
 	writer := NewKustoSpanWriter(client, logger, config.Database)
-	store := &Store{
+	store := &store{
 		reader: reader,
 		writer: writer,
 	}
@@ -37,17 +37,14 @@ func NewStore(config KustoConfig, logger hclog.Logger) *Store {
 	return store
 }
 
-// DependencyReader returns created kusto store
-func (store *Store) DependencyReader() dependencystore.Reader {
+func (store *store) DependencyReader() dependencystore.Reader {
 	return store.reader
 }
 
-// SpanReader returns created kusto store
-func (store *Store) SpanReader() spanstore.Reader {
+func (store *store) SpanReader() spanstore.Reader {
 	return store.reader
 }
 
-// SpanWriter returns created kusto store
-func (store *Store) SpanWriter() spanstore.Writer {
+func (store *store) SpanWriter() spanstore.Writer {
 	return store.writer
 }
