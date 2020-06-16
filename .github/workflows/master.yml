@@ -43,22 +43,22 @@ jobs:
       - name: Build
         run: go build -v .
 
-      - name: Calc coverage and test
-        run: |
-          export PATH=$PATH:$(go env GOPATH)/bin   
-          go test ./... -v -covermode=count -coverprofile=coverage.out
+#       - name: Calc coverage and test
+#         run: |
+#           export PATH=$PATH:$(go env GOPATH)/bin   
+#           go test ./... -v -covermode=count -coverprofile=coverage.out
 
-      - name: Convert coverage to lcov
-        uses: jandelgado/gcov2lcov-action@v1.0.2
-        with:
-          infile: coverage.out
-          outfile: coverage.lcov
+#       - name: Convert coverage to lcov
+#         uses: jandelgado/gcov2lcov-action@v1.0.2
+#         with:
+#           infile: coverage.out
+#           outfile: coverage.lcov
 
-      - name: Coveralls
-        uses: coverallsapp/github-action@master
-        with:
-          github-token: ${{ secrets.github_token }}
-          path-to-lcov: coverage.lcov
+#       - name: Coveralls
+#         uses: coverallsapp/github-action@master
+#         with:
+#           github-token: ${{ secrets.github_token }}
+#           path-to-lcov: coverage.lcov
 
       - name: Upload binary
         uses: actions/upload-artifact@v1
@@ -78,25 +78,41 @@ jobs:
           name: jaeger-kusto
 
       - name: Build collector
-        run: docker build . --file Dockerfile.collector --tag collector
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: dodopizza/jaeger-kusto/collector
+          dockerfile: Dockerfile.collector
+          tag_with_ref: true
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
 
-      - name: Build image
-        run: docker build . --file Dockerfile.query --tag query
-
-      - name: Log into registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
-
-      - name: Push images
-        run: |
-          # Strip git ref prefix from version
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-
-          # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-
-          echo VERSION=$VERSION
-
-          docker tag collector docker.pkg.github.com/dodopizza/jaeger-kusto/collector:$VERSION
-          docker tag query docker.pkg.github.com/dodopizza/jaeger-kusto/query:$VERSION
-          docker push docker.pkg.github.com/dodopizza/jaeger-kusto/collector:$VERSION
-          docker push docker.pkg.github.com/dodopizza/jaeger-kusto/query:$VERSION
+      - name: Build query
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: dodopizza/jaeger-kusto/query
+          dockerfile: Dockerfile.query
+          tag_with_ref: true
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          
+      - name: Build agent
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: dodopizza/jaeger-kusto/agent
+          dockerfile: Dockerfile.agent
+          tag_with_ref: true
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+            
+      - name: Build all in one
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: dodopizza/jaeger-kusto/all-in-one
+          dockerfile: Dockerfile
+          tag_with_ref: true
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
