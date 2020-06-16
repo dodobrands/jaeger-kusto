@@ -43,7 +43,7 @@ jobs:
           fi
 
       - name: Build
-        run: go build -v .
+        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v .
 
 #       - name: Calc coverage and test
 #         run: |
