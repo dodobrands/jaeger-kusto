@@ -63,8 +63,8 @@ func TestWriteSpan(tester *testing.T) {
 
 	testConfig := InitConfig(testConfigPath, logger)
 	kustoStore := NewStore(*testConfig, logger)
-	assert.Error(tester, kustoStore.SpanWriter().WriteSpan(span))
-	assert.Error(tester, kustoStore.SpanWriter().WriteSpan(span2))
-	assert.Error(tester, kustoStore.SpanWriter().WriteSpan(span3))
+	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(span))
+	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(span2))
+	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(span3))
 
 }

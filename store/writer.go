@@ -23,7 +23,7 @@ type kustoSpanWriter struct {
 	logger hclog.Logger
 }
 
-func NewKustoSpanWriter(client *kustoFactory, logger hclog.Logger, database string) *kustoSpanWriter {
+func newKustoSpanWriter(client *kustoFactory, logger hclog.Logger, database string) *kustoSpanWriter {
 
 	in, err := client.Ingest(database)
 	if err != nil {
@@ -61,6 +61,7 @@ func (k kustoSpanWriter) ingestCSV(ch <-chan []string) {
 			}
 			if b.Len() > 1048576 {
 				ingestBatch(k, b)
+				k.logger.Debug("Ingested batch by size")
 			}
 			err := writer.Write(buf)
 			if err != nil {
@@ -69,6 +70,7 @@ func (k kustoSpanWriter) ingestCSV(ch <-chan []string) {
 			writer.Flush()
 		case <-ticker.C:
 			ingestBatch(k, b)
+			k.logger.Debug("Ingested batch by time")
 		}
 	}
 }

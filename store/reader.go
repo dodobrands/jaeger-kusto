@@ -57,12 +57,12 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 	var spans []*model.Span
 	err = iter.Do(
 		func(row *table.Row) error {
-			rec := KustoSpan{}
+			rec := kustoSpan{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
 			}
 			var span *model.Span
-			span, err = TransformKustoSpanToSpan(&rec)
+			span, err = transformKustoSpanToModelSpan(&rec)
 			if err != nil {
 				return err
 			}
@@ -338,13 +338,13 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	err = iter.Do(
 		func(row *table.Row) error {
 
-			rec := KustoSpan{}
+			rec := kustoSpan{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
 			}
 
 			var span *model.Span
-			span, err = TransformKustoSpanToSpan(&rec)
+			span, err = transformKustoSpanToModelSpan(&rec)
 			if err != nil {
 				return err
 			}

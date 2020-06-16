@@ -10,7 +10,7 @@ import (
 	"github.com/jaegertracing/jaeger/plugin/storage/es/spanstore/dbmodel"
 )
 
-type KustoSpan struct {
+type kustoSpan struct {
 	TraceID            string        `kusto:"TraceID"`
 	SpanID             string        `kusto:"SpanID"`
 	OperationName      string        `kusto:"OperationName"`
@@ -30,7 +30,7 @@ const (
 	TagDotReplacementCharacter = "_"
 )
 
-func TransformKustoSpanToSpan(kustoSpan *KustoSpan) (*model.Span, error) {
+func transformKustoSpanToModelSpan(kustoSpan *kustoSpan) (*model.Span, error) {
 
 	var refs []dbmodel.Reference
 	err := json.Unmarshal(kustoSpan.References.Value, &refs)

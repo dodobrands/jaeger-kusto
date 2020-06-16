@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// KustoConfig contains AzureAD service principal and Kusto cluster configs
 type KustoConfig struct {
 	ClientID     string
 	ClientSecret string
@@ -15,6 +16,7 @@ type KustoConfig struct {
 	Database     string
 }
 
+// InitConfig reads config from file
 func InitConfig(configPath string, logger hclog.Logger) *KustoConfig {
 
 	var kustoConfig *KustoConfig
