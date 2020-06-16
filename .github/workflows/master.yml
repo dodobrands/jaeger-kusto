@@ -62,26 +62,6 @@ jobs:
 #           github-token: ${{ secrets.github_token }}
 #           path-to-lcov: coverage.lcov
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v1
-        with:
-          name: jaeger-kusto
-          path: jaeger-kusto
-
-  docker-push:
-    if: "!contains(github.event.head_commit.message, 'skip ci')"
-    name: Docker Push
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-
-      - name: Download binary
-        uses: actions/download-artifact@v1
-        with:
-          name: jaeger-kusto
-
       - name: Build collector
         uses: docker/build-push-action@v1
         with:
