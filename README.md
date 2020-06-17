@@ -1,6 +1,7 @@
 # Azure Data Explorer (Kusto) gRPC backend for Jaeger
 
 ![master](https://github.com/dodopizza/jaeger-kusto/workflows/master/badge.svg)
+![Docker Pulls](https://img.shields.io/docker/pulls/dodopizza/jaeger-kusto-collector)
 
 This is a storage grpc-plugin for [Jaeger end-to-end distributed tracing system](https://www.jaegertracing.io/).
 
@@ -60,3 +61,5 @@ You can check that jaeger-kusto ingestion is working with this query:
 | where Database == '<yourdatabase>' and CommandType == 'DataIngestPull'
 | top 10 by StartedOn
 ```
+
+For production deployment we have these charts: `dodopizza/jaeger-kusto-query` `dodopizza/jaeger-kusto-collector` `dodopizza/jaeger-kusto-agent`. You can view latest tag in docker hub - <https://hub.docker.com/r/dodopizza/jaeger-kusto/tags>
