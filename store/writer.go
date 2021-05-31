@@ -14,7 +14,7 @@ import (
 )
 
 type kustoIngest interface {
-	FromReader(ctx context.Context, reader io.Reader, options ...ingest.FileOption) error
+	FromReader(ctx context.Context, reader io.Reader, options ...ingest.FileOption) (*ingest.Result,error)
 }
 
 type kustoSpanWriter struct {
@@ -81,7 +81,7 @@ func ingestBatch(k kustoSpanWriter, b *bytes.Buffer) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err := k.ingest.FromReader(ctx, b, ingest.FileFormat(ingest.CSV))
+	_, err := k.ingest.FromReader(ctx, b, ingest.FileFormat(ingest.CSV))
 	if err == nil {
 		b.Reset()
 	} else {
