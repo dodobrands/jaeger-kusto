@@ -32,11 +32,23 @@ func (f *kustoFactory) Ingest(database string) (in kustoIngest, err error) {
 // NewStore creates new Kusto store for Jaeger span storage
 func NewStore(config KustoConfig, logger hclog.Logger) shared.StoragePlugin {
 
-	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
+	var authorization kusto.Authorization
+	if config.MSI {
+		msi, err := auth.NewMSIConfig().Authorizer()
+		if err != nil {
+			logger.Error("Error creating MSI authorizer", err.Error())
+			panic("cant create MSI authorizer")
+		}
+		authorization = kusto.Authorization{
+			Authorizer: msi,
+		}
+	} else {
+		authorization = kusto.Authorization{
+			Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
+		}
 	}
 
-	client, err := kusto.New(config.Endpoint, authorizer)
+	client, err := kusto.New(config.Endpoint, authorization)
 	if err != nil {
 		logger.Error("Error creating Kusto client", err.Error())
 		panic("cant create Kusto client")

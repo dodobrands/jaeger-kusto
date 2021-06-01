@@ -14,6 +14,7 @@ type KustoConfig struct {
 	TenantID     string
 	Endpoint     string
 	Database     string
+	MSI bool
 }
 
 // InitConfig reads config from file
@@ -51,6 +52,7 @@ func InitConfig(configPath string, logger hclog.Logger) *KustoConfig {
 		TenantID:     v.GetString("tenantId"),
 		Endpoint:     v.GetString("endpoint"),
 		Database:     v.GetString("database"),
+		MSI: v.GetBool("msi"),
 	}
 
 	return kustoConfig
