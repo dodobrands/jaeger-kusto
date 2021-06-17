@@ -78,7 +78,7 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
-	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("Spans | summarize count() by ProcessServiceName | sort by count_ | project ProcessServiceName"))
+	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("set query_results_cache_max_age = time(5m); Spans | summarize by ProcessServiceName | sort by ProcessServiceName asc"))
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 	var kustoStmt kusto.Stmt
 	if query.ServiceName == "" && query.SpanKind == "" {
 		kustoStmt = kusto.NewStmt(`Spans
-| summarize count() by OperationName, SpanKind=tostring(Tags.span_kind)
+| summarize count() by OperationName
 | sort by count_
 | project-away count_`)
 	}
@@ -125,7 +125,7 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 	if query.ServiceName != "" && query.SpanKind == "" {
 		kustoStmt = kusto.NewStmt(`Spans
 | where ProcessServiceName == ParamProcessServiceName
-| summarize count() by OperationName, SpanKind=tostring(Tags.span_kind)
+| summarize count() by OperationName
 | sort by count_
 | project-away count_`).MustDefinitions(
 			kusto.NewDefinitions().Must(
