@@ -1,5 +1,5 @@
 FROM jaegertracing/all-in-one:1.26 as jaeger
-FROM golang:1.14-alpine as build
+FROM golang:1.17-alpine as build
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /build/
