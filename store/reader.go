@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
+	"github.com/hashicorp/go-hclog"
 
 	"github.com/Azure/azure-kusto-go/kusto/unsafe"
 
@@ -20,14 +21,15 @@ import (
 type kustoSpanReader struct {
 	client   kustoReaderClient
 	database string
+	logger   hclog.Logger
 }
 
 type kustoReaderClient interface {
 	Query(ctx context.Context, db string, query kusto.Stmt, options ...kusto.QueryOption) (*kusto.RowIterator, error)
 }
 
-func newKustoSpanReader(client *kustoFactory, database string) *kustoSpanReader {
-	reader := &kustoSpanReader{client.Reader(), database}
+func newKustoSpanReader(client *kustoFactory, logger hclog.Logger, database string) *kustoSpanReader {
+	reader := &kustoSpanReader{client.Reader(), database, logger}
 	return reader
 }
 
@@ -40,7 +42,6 @@ var safetySwitch = unsafe.Stmt{
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-
 	kustoStmt := kusto.NewStmt("Spans | where TraceID == ParamTraceID").MustDefinitions(
 		kusto.NewDefinitions().Must(
 			kusto.ParamTypes{
@@ -108,7 +109,6 @@ func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 
 // GetOperations finds all operations by provided Service and SpanKind
 func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.OperationQueryParameters) ([]spanstore.Operation, error) {
-
 	type Operation struct {
 		OperationName string `kusto:"OperationName"`
 		SpanKind      string `kusto:"SpanKind"`
@@ -165,7 +165,6 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 
 // FindTraceIDs finds TraceIDs by provided query
 func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.TraceQueryParameters) ([]model.TraceID, error) {
-
 	if err := validateQuery(query); err != nil {
 		return nil, err
 	}
@@ -365,8 +364,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 }
 
 // GetDependencies returns DependencyLinks of services
-func (r *kustoSpanReader) GetDependencies(endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
-
+func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
 	type kustoDependencyLink struct {
 		Parent    string     `kusto:"Parent"`
 		Child     string     `kusto:"Child"`
@@ -388,9 +386,6 @@ func (r *kustoSpanReader) GetDependencies(endTs time.Time, lookback time.Duratio
 				"ParamLookBack": kusto.ParamType{Type: types.Timespan},
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
@@ -416,5 +411,4 @@ func (r *kustoSpanReader) GetDependencies(endTs time.Time, lookback time.Duratio
 	)
 
 	return dependencyLinks, err
-
 }

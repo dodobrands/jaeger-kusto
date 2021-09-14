@@ -1,1 +1,1 @@
-FROM jaegertracing/jaeger-agent:1.18
+FROM jaegertracing/jaeger-agent:1.26

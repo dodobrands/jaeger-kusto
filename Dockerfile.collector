@@ -1,4 +1,4 @@
-FROM jaegertracing/jaeger-collector:1.18
+FROM jaegertracing/jaeger-collector:1.26
 FROM alpine
 COPY --from=0 /go/bin/collector-linux /go/bin/collector-linux
 RUN apk add --update --no-cache ca-certificates

@@ -43,7 +43,7 @@ func NewStore(config KustoConfig, logger hclog.Logger) shared.StoragePlugin {
 	}
 	factory := kustoFactory{client}
 
-	reader := newKustoSpanReader(&factory, config.Database)
+	reader := newKustoSpanReader(&factory, logger, config.Database)
 
 	writer := newKustoSpanWriter(&factory, logger, config.Database)
 	store := &store{

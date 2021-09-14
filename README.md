@@ -5,7 +5,7 @@
 
 This is a storage grpc-plugin for [Jaeger end-to-end distributed tracing system](https://www.jaegertracing.io/).
 
-Currently supports version 1.18.
+Currently supports version 1.26.
 
 https://www.jaegertracing.io/
 
