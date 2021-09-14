@@ -3,8 +3,8 @@ module github.com/dodopizza/jaeger-kusto
 go 1.17
 
 require (
-	github.com/Azure/azure-kusto-go v0.3.2
-	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2
+	github.com/Azure/azure-kusto-go v0.4.0
+	github.com/Azure/go-autorest/autorest/azure/auth v0.5.8
 	github.com/dnaeon/go-vcr v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.16.2
 	github.com/jaegertracing/jaeger v1.26.0
@@ -21,13 +21,13 @@ require (
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.18 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.13 // indirect
-	github.com/Azure/go-autorest/autorest/azure/cli v0.3.1 // indirect
+	github.com/Azure/go-autorest/autorest/azure/cli v0.4.2 // indirect
 	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dimchansky/utfbom v1.1.0 // indirect
+	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/form3tech-oss/jwt-go v3.2.2+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
