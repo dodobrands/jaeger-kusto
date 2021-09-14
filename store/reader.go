@@ -387,9 +387,6 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
