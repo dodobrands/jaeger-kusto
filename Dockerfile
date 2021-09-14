@@ -1,11 +1,12 @@
-FROM jaegertracing/all-in-one:1.18 as jaeger
+FROM jaegertracing/all-in-one:1.26 as jaeger
 FROM golang:1.14-alpine as build
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /build/
 
-COPY . /build
+COPY go.mod go.sum /build/
 RUN go mod download
+COPY . /build
 RUN go build .
 
 FROM alpine:latest as run

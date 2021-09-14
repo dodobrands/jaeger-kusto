@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -15,7 +16,6 @@ const (
 )
 
 func TestWriteSpan(tester *testing.T) {
-
 	date, _ := time.Parse(time.RFC3339, "1990-12-02T16:50:41+00:00")
 	var span = &model.Span{
 		TraceID:       model.NewTraceID(555, 5),
@@ -63,8 +63,7 @@ func TestWriteSpan(tester *testing.T) {
 
 	testConfig := InitConfig(testConfigPath, logger)
 	kustoStore := NewStore(*testConfig, logger)
-	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(span))
-	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(span2))
-	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(span3))
-
+	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span))
+	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span2))
+	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span3))
 }

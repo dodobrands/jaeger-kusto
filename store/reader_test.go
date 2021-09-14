@@ -23,7 +23,6 @@ var (
 const testConfigPath = ".././jaeger-kusto-config.json"
 
 func TestKustoSpanReader_GetTrace(tester *testing.T) {
-
 	testConfig := InitConfig(testConfigPath, logger)
 	kustoStore := NewStore(*testConfig, logger)
 	trace, _ := model.TraceIDFromString("0232d7f26e2317b1")
@@ -39,7 +38,6 @@ func TestKustoSpanReader_GetTrace(tester *testing.T) {
 }
 
 func TestKustoSpanReader_GetServices(t *testing.T) {
-
 	testConfig := InitConfig(testConfigPath, logger)
 	kustoStore := NewStore(*testConfig, logger)
 
@@ -54,7 +52,6 @@ func TestKustoSpanReader_GetServices(t *testing.T) {
 }
 
 func TestKustoSpanReader_GetOperations(t *testing.T) {
-
 	testConfig := InitConfig(testConfigPath, logger)
 	kustoStore := NewStore(*testConfig, logger)
 
@@ -94,13 +91,12 @@ func TestFindTraces(tester *testing.T) {
 		logger.Error("can't find traces", err.Error())
 	}
 	fmt.Printf("%+v\n", traces)
-
 }
 
 func TestStore_DependencyReader(t *testing.T) {
 	testConfig := InitConfig(testConfigPath, logger)
 	kustoStore := NewStore(*testConfig, logger)
-	dependencyLinks, err := kustoStore.DependencyReader().GetDependencies(time.Now(), 168*time.Hour)
+	dependencyLinks, err := kustoStore.DependencyReader().GetDependencies(context.Background(), time.Now(), 168*time.Hour)
 	if err != nil {
 		logger.Error("can't find dependencyLinks", err.Error())
 	}

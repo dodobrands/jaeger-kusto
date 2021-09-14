@@ -14,7 +14,7 @@ import (
 )
 
 type kustoIngest interface {
-	FromReader(ctx context.Context, reader io.Reader, options ...ingest.FileOption) (*ingest.Result,error)
+	FromReader(ctx context.Context, reader io.Reader, options ...ingest.FileOption) (*ingest.Result, error)
 }
 
 type kustoSpanWriter struct {
@@ -24,7 +24,6 @@ type kustoSpanWriter struct {
 }
 
 func newKustoSpanWriter(client *kustoFactory, logger hclog.Logger, database string) *kustoSpanWriter {
-
 	in, err := client.Ingest(database)
 	if err != nil {
 		logger.Error(fmt.Sprintf("%#v", err))
@@ -37,8 +36,7 @@ func newKustoSpanWriter(client *kustoFactory, logger hclog.Logger, database stri
 	return writer
 }
 
-func (k kustoSpanWriter) WriteSpan(span *model.Span) error {
-
+func (k kustoSpanWriter) WriteSpan(ctx context.Context, span *model.Span) error {
 	spanStringArray, err := TransformSpanToStringArray(span)
 
 	k.ch <- spanStringArray
@@ -46,7 +44,6 @@ func (k kustoSpanWriter) WriteSpan(span *model.Span) error {
 }
 
 func (k kustoSpanWriter) ingestCSV(ch <-chan []string) {
-
 	ticker := time.NewTicker(5 * time.Second)
 
 	b := &bytes.Buffer{}
