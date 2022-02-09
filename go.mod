@@ -3,7 +3,7 @@ module github.com/dodopizza/jaeger-kusto
 go 1.17
 
 require (
-	github.com/Azure/azure-kusto-go v0.5.0
+	github.com/Azure/azure-kusto-go v0.5.2
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.11
 	github.com/hashicorp/go-hclog v1.1.0
 	github.com/jaegertracing/jaeger v1.31.0
