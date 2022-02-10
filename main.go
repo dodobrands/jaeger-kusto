@@ -4,26 +4,22 @@ import (
 	"flag"
 
 	"github.com/dodopizza/jaeger-kusto/store"
-	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 )
 
 func main() {
-	logger := hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Warn,
-		Name:       "jaeger-kusto",
-		JSONFormat: true,
-	})
+	pluginConfig := store.PluginConfig{}
 
-	var configPath string
-
-	flag.StringVar(&configPath, "config", "", "A path to the plugin's configuration file")
+	flag.StringVar(&pluginConfig.KustoConfigPath, "config", "", "The path to the plugin's configuration file")
+	flag.StringVar(&pluginConfig.LogLevel, "log-level", "", "The threshold for plugin's logs. Anything below will be ignored")
+	flag.BoolVar(&pluginConfig.LogJson, "log-json", true, "The control determines will be logs in JSON format")
 	flag.Parse()
 
-	kustoConfig := store.InitConfig(configPath, logger)
-
+	logger := store.NewLogger(pluginConfig)
+	kustoConfig := store.NewKustoConfig(pluginConfig, logger)
 	kustoStore := store.NewStore(*kustoConfig, logger)
+
 	grpc.Serve(&shared.PluginServices{
 		Store: kustoStore,
 	})

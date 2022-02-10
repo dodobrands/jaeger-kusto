@@ -6,24 +6,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/go-hclog"
-
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 )
 
 var (
-	logger = hclog.New(&hclog.LoggerOptions{
-		Level:      hclog.Debug,
-		Name:       "jaeger-kusto-tests",
-		JSONFormat: true,
-	})
+	testPluginConfig = PluginConfig{
+		KustoConfigPath: ".././jaeger-kusto-config.json",
+		LogLevel:        "debug",
+		LogJson:         false,
+	}
+	logger = NewLogger(testPluginConfig)
 )
 
-const testConfigPath = ".././jaeger-kusto-config.json"
-
 func TestKustoSpanReader_GetTrace(tester *testing.T) {
-	testConfig := InitConfig(testConfigPath, logger)
+	testConfig := NewKustoConfig(testPluginConfig, logger)
 	kustoStore := NewStore(*testConfig, logger)
 	trace, _ := model.TraceIDFromString("0232d7f26e2317b1")
 
@@ -38,7 +35,7 @@ func TestKustoSpanReader_GetTrace(tester *testing.T) {
 }
 
 func TestKustoSpanReader_GetServices(t *testing.T) {
-	testConfig := InitConfig(testConfigPath, logger)
+	testConfig := NewKustoConfig(testPluginConfig, logger)
 	kustoStore := NewStore(*testConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -52,7 +49,7 @@ func TestKustoSpanReader_GetServices(t *testing.T) {
 }
 
 func TestKustoSpanReader_GetOperations(t *testing.T) {
-	testConfig := InitConfig(testConfigPath, logger)
+	testConfig := NewKustoConfig(testPluginConfig, logger)
 	kustoStore := NewStore(*testConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -80,7 +77,7 @@ func TestFindTraces(tester *testing.T) {
 		},
 	}
 
-	testConfig := InitConfig(testConfigPath, logger)
+	testConfig := NewKustoConfig(testPluginConfig, logger)
 	kustoStore := NewStore(*testConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -94,7 +91,7 @@ func TestFindTraces(tester *testing.T) {
 }
 
 func TestStore_DependencyReader(t *testing.T) {
-	testConfig := InitConfig(testConfigPath, logger)
+	testConfig := NewKustoConfig(testPluginConfig, logger)
 	kustoStore := NewStore(*testConfig, logger)
 	dependencyLinks, err := kustoStore.DependencyReader().GetDependencies(context.Background(), time.Now(), 168*time.Hour)
 	if err != nil {

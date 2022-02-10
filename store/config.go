@@ -7,6 +7,17 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	ServiceName = "jaeger-kusto"
+)
+
+// PluginConfig contains global options
+type PluginConfig struct {
+	KustoConfigPath string
+	LogLevel        string
+	LogJson         bool
+}
+
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
 type KustoConfig struct {
 	ClientID     string
@@ -16,18 +27,18 @@ type KustoConfig struct {
 	Database     string
 }
 
-// InitConfig reads config from file
-func InitConfig(configPath string, logger hclog.Logger) *KustoConfig {
+// NewKustoConfig reads config from plugin settings
+func NewKustoConfig(pc PluginConfig, logger hclog.Logger) *KustoConfig {
 
 	var kustoConfig *KustoConfig
 
 	v := viper.New()
 
-	if configPath != "" {
+	if pc.KustoConfigPath != "" {
 		logger.Debug("trying to read config file")
-		logger.Debug("configPath is " + configPath)
+		logger.Debug("configPath is " + pc.KustoConfigPath)
 
-		f, err := ioutil.ReadFile(configPath)
+		f, err := ioutil.ReadFile(pc.KustoConfigPath)
 
 		if err != nil { // Handle errors reading the config file
 			logger.Error("error reading config file", err.Error())
@@ -36,7 +47,7 @@ func InitConfig(configPath string, logger hclog.Logger) *KustoConfig {
 
 		logger.Debug("initializing Kusto storage")
 
-		v.SetConfigFile(configPath)
+		v.SetConfigFile(pc.KustoConfigPath)
 		v.SetConfigType("json")
 		err = v.ReadInConfig() // Find and read the config file
 		if err != nil {        // Handle errors reading the config file
@@ -54,4 +65,28 @@ func InitConfig(configPath string, logger hclog.Logger) *KustoConfig {
 	}
 
 	return kustoConfig
+}
+
+func NewLogger(pc PluginConfig) hclog.Logger {
+	// log level used by default
+	logLevel := hclog.Warn
+
+	switch pc.LogLevel {
+	case "warn":
+		logLevel = hclog.Warn
+	case "info":
+		logLevel = hclog.Info
+	case "debug":
+		logLevel = hclog.Debug
+	case "off":
+		logLevel = hclog.Off
+	}
+
+	return hclog.New(
+		&hclog.LoggerOptions{
+			Level:      logLevel,
+			Name:       ServiceName,
+			JSONFormat: pc.LogJson,
+		},
+	)
 }
