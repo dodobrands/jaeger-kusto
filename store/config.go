@@ -14,9 +14,11 @@ const (
 
 // PluginConfig contains global options
 type PluginConfig struct {
-	KustoConfigPath string
-	LogLevel        string
-	LogJson         bool
+	KustoConfigPath          string
+	LogLevel                 string
+	LogJson                  bool
+	TracingSamplerPercentage float64
+	TracingRPCMetrics        bool
 }
 
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
