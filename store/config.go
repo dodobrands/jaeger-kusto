@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"io/ioutil"
 
 	"github.com/hashicorp/go-hclog"
@@ -28,35 +29,29 @@ type KustoConfig struct {
 }
 
 // NewKustoConfig reads config from plugin settings
-func NewKustoConfig(pc PluginConfig, logger hclog.Logger) *KustoConfig {
-
-	var kustoConfig *KustoConfig
-
+func NewKustoConfig(pc *PluginConfig, logger hclog.Logger) (*KustoConfig, error) {
 	v := viper.New()
 
 	if pc.KustoConfigPath != "" {
-		logger.Debug("trying to read config file")
-		logger.Debug("configPath is " + pc.KustoConfigPath)
+		logger.Debug("trying to read config file", "file", pc.KustoConfigPath)
 
 		f, err := ioutil.ReadFile(pc.KustoConfigPath)
-
-		if err != nil { // Handle errors reading the config file
-			logger.Error("error reading config file", err.Error())
+		if err != nil {
+			return nil, err
 		}
-		logger.Debug("file contents:" + string(f))
 
+		logger.Debug("file content is", "content", string(f))
 		logger.Debug("initializing Kusto storage")
 
 		v.SetConfigFile(pc.KustoConfigPath)
 		v.SetConfigType("json")
-		err = v.ReadInConfig() // Find and read the config file
-		if err != nil {        // Handle errors reading the config file
-			logger.Error("error reading config file", err.Error())
+		if err := v.ReadInConfig(); err != nil {
+			return nil, err
 		}
 	}
 	v.AutomaticEnv()
 
-	kustoConfig = &KustoConfig{
+	config := KustoConfig{
 		ClientID:     v.GetString("clientId"),
 		ClientSecret: v.GetString("clientSecret"),
 		TenantID:     v.GetString("tenantId"),
@@ -64,29 +59,40 @@ func NewKustoConfig(pc PluginConfig, logger hclog.Logger) *KustoConfig {
 		Database:     v.GetString("database"),
 	}
 
-	return kustoConfig
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
 
-func NewLogger(pc PluginConfig) hclog.Logger {
-	// log level used by default
-	logLevel := hclog.Warn
-
-	switch pc.LogLevel {
-	case "warn":
-		logLevel = hclog.Warn
-	case "info":
-		logLevel = hclog.Info
-	case "debug":
-		logLevel = hclog.Debug
-	case "off":
-		logLevel = hclog.Off
+// NewLogger returns configured logger from global options
+func NewLogger(pc *PluginConfig) hclog.Logger {
+	level := hclog.LevelFromString(pc.LogLevel)
+	if level == hclog.NoLevel {
+		// log level used by default
+		level = hclog.Warn
 	}
 
 	return hclog.New(
 		&hclog.LoggerOptions{
-			Level:      logLevel,
+			Level:      level,
 			Name:       ServiceName,
 			JSONFormat: pc.LogJson,
 		},
 	)
+}
+
+// Validate returns error if any of required fields missing
+func (kc *KustoConfig) validate() error {
+	if kc.Database == "" {
+		return errors.New("missing database in kusto configuration")
+	}
+	if kc.Endpoint == "" {
+		return errors.New("missing endpoint in kusto configuration")
+	}
+	if kc.ClientID == "" || kc.ClientSecret == "" || kc.TenantID == "" {
+		return errors.New("missing client configuration (ClientId, ClientSecret, TenantId) for kusto")
+	}
+	return nil
 }

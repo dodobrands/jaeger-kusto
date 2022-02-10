@@ -3,7 +3,6 @@ package store
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"time"
 
@@ -23,20 +22,20 @@ type kustoSpanWriter struct {
 	logger hclog.Logger
 }
 
-func newKustoSpanWriter(client *kustoFactory, logger hclog.Logger, database string) *kustoSpanWriter {
+func newKustoSpanWriter(client *kustoFactory, logger hclog.Logger, database string) (*kustoSpanWriter, error) {
 	in, err := client.Ingest(database)
 	if err != nil {
-		logger.Error(fmt.Sprintf("%#v", err))
+		return nil, err
 	}
 	ch := make(chan []string, 100)
 	writer := &kustoSpanWriter{in, ch, logger}
 
 	go writer.ingestCSV(ch)
 
-	return writer
+	return writer, nil
 }
 
-func (k kustoSpanWriter) WriteSpan(ctx context.Context, span *model.Span) error {
+func (k kustoSpanWriter) WriteSpan(_ context.Context, span *model.Span) error {
 	spanStringArray, err := TransformSpanToStringArray(span)
 
 	k.ch <- spanStringArray

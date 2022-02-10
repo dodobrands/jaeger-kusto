@@ -30,29 +30,39 @@ func (f *kustoFactory) Ingest(database string) (in kustoIngest, err error) {
 }
 
 // NewStore creates new Kusto store for Jaeger span storage
-func NewStore(config KustoConfig, logger hclog.Logger) shared.StoragePlugin {
-
+func NewStore(config *KustoConfig, logger hclog.Logger) (shared.StoragePlugin, error) {
 	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(config.ClientID, config.ClientSecret, config.TenantID),
+		Config: auth.NewClientCredentialsConfig(
+			config.ClientID,
+			config.ClientSecret,
+			config.TenantID,
+		),
 	}
 
 	client, err := kusto.New(config.Endpoint, authorizer)
 	if err != nil {
-		logger.Error("Error creating Kusto client", err.Error())
-		panic("cant create Kusto client")
+		return nil, err
 	}
+
 	factory := kustoFactory{client}
 
-	reader := newKustoSpanReader(&factory, logger, config.Database)
+	reader, err := newKustoSpanReader(&factory, logger, config.Database)
+	if err != nil {
+		return nil, err
+	}
 
-	writer := newKustoSpanWriter(&factory, logger, config.Database)
+	writer, err := newKustoSpanWriter(&factory, logger, config.Database)
+	if err != nil {
+		return nil, err
+	}
+
 	store := &store{
 		dependencyStoreReader: reader,
 		reader:                reader,
 		writer:                writer,
 	}
 
-	return store
+	return store, nil
 }
 
 func (store *store) DependencyReader() dependencystore.Reader {
