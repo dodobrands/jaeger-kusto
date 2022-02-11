@@ -28,10 +28,10 @@ type kustoReaderClient interface {
 	Query(ctx context.Context, db string, query kusto.Stmt, options ...kusto.QueryOption) (*kusto.RowIterator, error)
 }
 
-func newKustoSpanReader(client *kustoFactory, logger hclog.Logger, database string) (*kustoSpanReader, error) {
+func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger) (*kustoSpanReader, error) {
 	return &kustoSpanReader{
-		client.Reader(),
-		database,
+		factory.Reader(),
+		factory.Database,
 		logger,
 	}, nil
 }
