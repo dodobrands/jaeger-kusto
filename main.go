@@ -25,6 +25,14 @@ func flags(pc *store.PluginConfig) {
 		"log-json",
 		pc.LogJson,
 		"The control option determines will be logs in JSON format")
+	flag.BoolVar(&pc.ProfilingEnabled,
+		"profile",
+		pc.ProfilingEnabled,
+		"The control determines will be enabled pprof profiling for plugin")
+	flag.IntVar(&pc.ProfilingPort,
+		"profile-port",
+		pc.ProfilingPort,
+		"The port used for pporf profiling")
 	flag.Float64Var(
 		&pc.TracingSamplerPercentage,
 		"tracing-sample-percentage",

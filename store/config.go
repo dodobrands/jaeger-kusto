@@ -17,6 +17,8 @@ type PluginConfig struct {
 	KustoConfigPath           string
 	LogLevel                  string
 	LogJson                   bool
+	ProfilingEnabled          bool
+	ProfilingPort             int
 	TracingSamplerPercentage  float64
 	TracingRPCMetrics         bool
 	WriterSpanBufferSize      int
@@ -39,6 +41,8 @@ func NewPluginConfig() *PluginConfig {
 		KustoConfigPath:           "",
 		LogLevel:                  "warn",
 		LogJson:                   true,
+		ProfilingEnabled:          false,
+		ProfilingPort:             6060,
 		TracingSamplerPercentage:  0.0,   // disabled by default
 		TracingRPCMetrics:         false, // disabled by default
 		WriterSpanBufferSize:      100,
