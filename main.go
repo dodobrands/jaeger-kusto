@@ -2,7 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/hashicorp/go-plugin"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/dodopizza/jaeger-kusto/store"
@@ -63,6 +66,14 @@ func main() {
 	flag.Parse()
 
 	logger := store.NewLogger(pluginConfig)
+
+	if pluginConfig.ProfilingEnabled {
+		logger.Debug("starting profiling server at port", "port", pluginConfig.ProfilingPort)
+		go func() {
+			_ = http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", pluginConfig.ProfilingPort), nil)
+		}()
+	}
+
 	kustoConfig, err := store.NewKustoConfig(pluginConfig, logger)
 	if err != nil {
 		logger.Error("error occurred while reading kusto configuration", "error", err)
