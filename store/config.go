@@ -14,11 +14,14 @@ const (
 
 // PluginConfig contains global options
 type PluginConfig struct {
-	KustoConfigPath          string
-	LogLevel                 string
-	LogJson                  bool
-	TracingSamplerPercentage float64
-	TracingRPCMetrics        bool
+	KustoConfigPath           string
+	LogLevel                  string
+	LogJson                   bool
+	TracingSamplerPercentage  float64
+	TracingRPCMetrics         bool
+	WriterSpanBufferSize      int
+	WriterBatchMaxBytes       int
+	WriterBatchTimeoutSeconds int
 }
 
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
@@ -28,6 +31,20 @@ type KustoConfig struct {
 	TenantID     string
 	Endpoint     string
 	Database     string
+}
+
+// NewPluginConfig returns default configuration options
+func NewPluginConfig() *PluginConfig {
+	return &PluginConfig{
+		KustoConfigPath:           "",
+		LogLevel:                  "warn",
+		LogJson:                   true,
+		TracingSamplerPercentage:  0.0,   // disabled by default
+		TracingRPCMetrics:         false, // disabled by default
+		WriterSpanBufferSize:      100,
+		WriterBatchMaxBytes:       1048576, // 1 Mb by default
+		WriterBatchTimeoutSeconds: 5,
+	}
 }
 
 // NewKustoConfig reads config from plugin settings
