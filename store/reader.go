@@ -28,9 +28,12 @@ type kustoReaderClient interface {
 	Query(ctx context.Context, db string, query kusto.Stmt, options ...kusto.QueryOption) (*kusto.RowIterator, error)
 }
 
-func newKustoSpanReader(client *kustoFactory, logger hclog.Logger, database string) *kustoSpanReader {
-	reader := &kustoSpanReader{client.Reader(), database, logger}
-	return reader
+func newKustoSpanReader(client *kustoFactory, logger hclog.Logger, database string) (*kustoSpanReader, error) {
+	return &kustoSpanReader{
+		client.Reader(),
+		database,
+		logger,
+	}, nil
 }
 
 const defaultNumTraces = 20
