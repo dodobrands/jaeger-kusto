@@ -61,7 +61,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	kustoStore, err := store.NewStore(kustoConfig, logger)
+	kustoStore, err := store.NewStore(pluginConfig, kustoConfig, logger)
 	if err != nil {
 		logger.Error("error occurred while initializing kusto storage", "error", err)
 		os.Exit(2)

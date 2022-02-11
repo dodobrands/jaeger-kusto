@@ -2,7 +2,6 @@ package store
 
 import (
 	"github.com/Azure/azure-kusto-go/kusto"
-	"github.com/Azure/azure-kusto-go/kusto/ingest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
@@ -16,42 +15,29 @@ type store struct {
 	writer                spanstore.Writer
 }
 
-type kustoFactory struct {
-	*kusto.Client
-}
-
-func (f *kustoFactory) Reader() kustoReaderClient {
-	return f.Client
-}
-
-func (f *kustoFactory) Ingest(database string) (in kustoIngest, err error) {
-	in, err = ingest.New(f.Client, database, "Spans")
-	return
-}
-
 // NewStore creates new Kusto store for Jaeger span storage
-func NewStore(config *KustoConfig, logger hclog.Logger) (shared.StoragePlugin, error) {
+func NewStore(pc *PluginConfig, kc *KustoConfig, logger hclog.Logger) (shared.StoragePlugin, error) {
 	authorizer := kusto.Authorization{
 		Config: auth.NewClientCredentialsConfig(
-			config.ClientID,
-			config.ClientSecret,
-			config.TenantID,
+			kc.ClientID,
+			kc.ClientSecret,
+			kc.TenantID,
 		),
 	}
 
-	client, err := kusto.New(config.Endpoint, authorizer)
+	client, err := kusto.New(kc.Endpoint, authorizer)
 	if err != nil {
 		return nil, err
 	}
 
-	factory := kustoFactory{client}
+	factory := newKustoFactory(client, pc, kc.Database)
 
-	reader, err := newKustoSpanReader(&factory, logger, config.Database)
+	reader, err := newKustoSpanReader(factory, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	writer, err := newKustoSpanWriter(&factory, logger, config.Database)
+	writer, err := newKustoSpanWriter(factory, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +51,17 @@ func NewStore(config *KustoConfig, logger hclog.Logger) (shared.StoragePlugin, e
 	return store, nil
 }
 
+// DependencyReader returns implementation of dependencystore.Reader interface
 func (store *store) DependencyReader() dependencystore.Reader {
 	return store.dependencyStoreReader
 }
 
+// SpanReader returns implementation of spanstore.Reader interface
 func (store *store) SpanReader() spanstore.Reader {
 	return store.reader
 }
 
+// SpanWriter returns implementation of spanstore.Writer interface
 func (store *store) SpanWriter() spanstore.Writer {
 	return store.writer
 }
