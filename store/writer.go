@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/ingest"
@@ -22,6 +23,8 @@ type kustoSpanWriter struct {
 	ingest        kustoIngest
 	logger        hclog.Logger
 	spanInput     chan []string
+	shutdown      chan bool
+	shutdownWg    sync.WaitGroup
 }
 
 func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanWriter, error) {
@@ -36,6 +39,8 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 		ingest:        in,
 		logger:        logger,
 		spanInput:     make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
+		shutdown:      make(chan bool),
+		shutdownWg:    sync.WaitGroup{},
 	}
 
 	go writer.ingestCSV()
@@ -43,14 +48,26 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 	return writer, nil
 }
 
-func (kw kustoSpanWriter) WriteSpan(_ context.Context, span *model.Span) error {
+func (kw *kustoSpanWriter) WriteSpan(_ context.Context, span *model.Span) error {
 	spanStringArray, err := TransformSpanToStringArray(span)
 
 	kw.spanInput <- spanStringArray
 	return err
 }
 
-func (kw kustoSpanWriter) ingestCSV() {
+func (kw *kustoSpanWriter) Close() error {
+	kw.logger.Debug("plugin shutdown started")
+
+	kw.shutdownWg.Add(1)
+	kw.shutdown <- true
+	kw.shutdownWg.Wait()
+	close(kw.spanInput)
+
+	kw.logger.Debug("plugin shutdown completed")
+	return nil
+}
+
+func (kw *kustoSpanWriter) ingestCSV() {
 	ticker := time.NewTicker(kw.batchTimeout)
 
 	b := &bytes.Buffer{}
@@ -78,11 +95,16 @@ func (kw kustoSpanWriter) ingestCSV() {
 			batchSize := b.Len()
 			kw.ingestBatch(b)
 			kw.logger.Debug("Ingested batch by time", "batchSize", batchSize)
+		case <-kw.shutdown:
+			batchSize := b.Len()
+			kw.ingestBatch(b)
+			kw.logger.Debug("Ingested batch by shutdown", "batchSize", batchSize)
+			kw.shutdownWg.Done()
 		}
 	}
 }
 
-func (kw kustoSpanWriter) ingestBatch(b *bytes.Buffer) {
+func (kw *kustoSpanWriter) ingestBatch(b *bytes.Buffer) {
 	if b.Len() == 0 {
 		return
 	}
