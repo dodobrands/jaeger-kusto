@@ -14,31 +14,35 @@ const (
 
 // PluginConfig contains global options
 type PluginConfig struct {
-	KustoConfigPath           string
-	LogLevel                  string
-	LogJson                   bool
-	TracingSamplerPercentage  float64
-	TracingRPCMetrics         bool
-	WriterSpanBufferSize      int
-	WriterBatchMaxBytes       int
-	WriterBatchTimeoutSeconds int
+	KustoConfigPath           string  `json:"kustoConfigPath"`
+	LogLevel                  string  `json:"logLevel"`
+	LogJson                   bool    `json:"logJson"`
+	ProfilingEnabled          bool    `json:"profilingEnabled"`
+	ProfilingPort             int     `json:"profilingPort"`
+	TracingSamplerPercentage  float64 `json:"tracingSamplerPercentage"`
+	TracingRPCMetrics         bool    `json:"tracingRPCMetrics"`
+	WriterSpanBufferSize      int     `json:"writerSpanBufferSize"`
+	WriterBatchMaxBytes       int     `json:"writerBatchMaxBytes"`
+	WriterBatchTimeoutSeconds int     `json:"writerBatchTimeoutSeconds"`
 }
 
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
 type KustoConfig struct {
-	ClientID     string
-	ClientSecret string
-	TenantID     string
-	Endpoint     string
-	Database     string
+	ClientID     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret"`
+	TenantID     string `json:"tenantId"`
+	Endpoint     string `json:"endpoint"`
+	Database     string `json:"database"`
 }
 
-// NewPluginConfig returns default configuration options
-func NewPluginConfig() *PluginConfig {
+// NewDefaultPluginConfig returns default configuration options
+func NewDefaultPluginConfig() *PluginConfig {
 	return &PluginConfig{
 		KustoConfigPath:           "",
 		LogLevel:                  "warn",
-		LogJson:                   true,
+		LogJson:                   false,
+		ProfilingEnabled:          false,
+		ProfilingPort:             6060,
 		TracingSamplerPercentage:  0.0,   // disabled by default
 		TracingRPCMetrics:         false, // disabled by default
 		WriterSpanBufferSize:      100,
@@ -47,42 +51,28 @@ func NewPluginConfig() *PluginConfig {
 	}
 }
 
-// NewKustoConfig reads config from plugin settings
-func NewKustoConfig(pc *PluginConfig, logger hclog.Logger) (*KustoConfig, error) {
-	v := viper.New()
-
-	if pc.KustoConfigPath != "" {
-		logger.Debug("trying to read config file", "file", pc.KustoConfigPath)
-
-		f, err := ioutil.ReadFile(pc.KustoConfigPath)
-		if err != nil {
-			return nil, err
-		}
-
-		logger.Debug("file content is", "content", string(f))
-		logger.Debug("initializing Kusto storage")
-
-		v.SetConfigFile(pc.KustoConfigPath)
-		v.SetConfigType("json")
-		if err := v.ReadInConfig(); err != nil {
-			return nil, err
-		}
+// ParseConfig reads file at path and returns instance of PluginConfig or error
+func ParseConfig(path string) (*PluginConfig, error) {
+	pc := NewDefaultPluginConfig()
+	if err := load(path, pc); err != nil {
+		return nil, err
 	}
-	v.AutomaticEnv()
+	return pc, nil
+}
 
-	config := KustoConfig{
-		ClientID:     v.GetString("clientId"),
-		ClientSecret: v.GetString("clientSecret"),
-		TenantID:     v.GetString("tenantId"),
-		Endpoint:     v.GetString("endpoint"),
-		Database:     v.GetString("database"),
-	}
+// ParseKustoConfig reads file at path and returns instance of KustoConfig or error
+func ParseKustoConfig(path string) (*KustoConfig, error) {
+	c := &KustoConfig{}
 
-	if err := config.validate(); err != nil {
+	if err := load(path, c); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	if err := c.validate(); err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 // NewLogger returns configured logger from global options
@@ -114,4 +104,25 @@ func (kc *KustoConfig) validate() error {
 		return errors.New("missing client configuration (ClientId, ClientSecret, TenantId) for kusto")
 	}
 	return nil
+}
+
+func load(path string, data interface{}) error {
+	if path == "" {
+		return errors.New("empty path to config")
+	}
+
+	_, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	v := viper.New()
+	v.SetConfigFile(path)
+	v.SetConfigType("json")
+
+	if err := v.ReadInConfig(); err != nil {
+		return err
+	}
+
+	return v.Unmarshal(data)
 }

@@ -61,7 +61,7 @@ func TestWriteSpan(tester *testing.T) {
 		}},
 	}
 
-	kustoConfig, _ := NewKustoConfig(testPluginConfig, logger)
+	kustoConfig, _ := ParseKustoConfig(testPluginConfig.KustoConfigPath)
 	kustoStore, _ := NewStore(testPluginConfig, kustoConfig, logger)
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span))
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span2))

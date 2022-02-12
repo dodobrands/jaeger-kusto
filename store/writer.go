@@ -17,11 +17,11 @@ type kustoIngest interface {
 }
 
 type kustoSpanWriter struct {
-	ingest        kustoIngest
-	ch            chan []string
-	logger        hclog.Logger
 	batchMaxBytes int
 	batchTimeout  time.Duration
+	ingest        kustoIngest
+	logger        hclog.Logger
+	spanInput     chan []string
 }
 
 func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanWriter, error) {
@@ -31,14 +31,14 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 	}
 
 	writer := &kustoSpanWriter{
-		ingest:        in,
-		ch:            make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
-		logger:        logger,
 		batchMaxBytes: factory.PluginConfig.WriterBatchMaxBytes,
 		batchTimeout:  time.Duration(factory.PluginConfig.WriterBatchTimeoutSeconds) * time.Second,
+		ingest:        in,
+		logger:        logger,
+		spanInput:     make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
 	}
 
-	go writer.ingestCSV(writer.ch)
+	go writer.ingestCSV()
 
 	return writer, nil
 }
@@ -46,11 +46,11 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 func (kw kustoSpanWriter) WriteSpan(_ context.Context, span *model.Span) error {
 	spanStringArray, err := TransformSpanToStringArray(span)
 
-	kw.ch <- spanStringArray
+	kw.spanInput <- spanStringArray
 	return err
 }
 
-func (kw kustoSpanWriter) ingestCSV(ch <-chan []string) {
+func (kw kustoSpanWriter) ingestCSV() {
 	ticker := time.NewTicker(kw.batchTimeout)
 
 	b := &bytes.Buffer{}
@@ -59,22 +59,25 @@ func (kw kustoSpanWriter) ingestCSV(ch <-chan []string) {
 
 	for {
 		select {
-		case spans, ok := <-ch:
+		case spans, ok := <-kw.spanInput:
 			if !ok {
 				return
 			}
-			if b.Len() > kw.batchMaxBytes {
+			batchSize := b.Len()
+			if batchSize > kw.batchMaxBytes {
+				kw.logger.Debug("Ingested batch by size", "batchSize", batchSize)
 				kw.ingestBatch(b)
-				kw.logger.Debug("Ingested batch by size")
 			}
+			kw.logger.Debug("Append spans to batch buffer", "spanCount", len(spans))
 			err := writer.Write(spans)
 			if err != nil {
 				kw.logger.Error("Failed to write csv", "error", err)
 			}
 			writer.Flush()
 		case <-ticker.C:
+			batchSize := b.Len()
 			kw.ingestBatch(b)
-			kw.logger.Debug("Ingested batch by time")
+			kw.logger.Debug("Ingested batch by time", "batchSize", batchSize)
 		}
 	}
 }

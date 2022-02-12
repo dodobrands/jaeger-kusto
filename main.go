@@ -2,7 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/hashicorp/go-plugin"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/dodopizza/jaeger-kusto/store"
@@ -12,50 +15,27 @@ import (
 	googleGRPC "google.golang.org/grpc"
 )
 
-func flags(pc *store.PluginConfig) {
-	flag.StringVar(&pc.KustoConfigPath,
-		"config",
-		pc.KustoConfigPath,
-		"The path to the plugin's configuration file")
-	flag.StringVar(&pc.LogLevel,
-		"log-level",
-		pc.LogLevel,
-		"The threshold for plugin's logs. Anything below will be ignored")
-	flag.BoolVar(&pc.LogJson,
-		"log-json",
-		pc.LogJson,
-		"The control option determines will be logs in JSON format")
-	flag.Float64Var(
-		&pc.TracingSamplerPercentage,
-		"tracing-sample-percentage",
-		pc.TracingSamplerPercentage,
-		"The percentage of grpc plugin traces. Value 0.0 disables tracing")
-	flag.BoolVar(&pc.TracingRPCMetrics,
-		"tracing-sample-rpc-metrics",
-		pc.TracingRPCMetrics,
-		"The control determines will be RPC metrics emitted")
-	flag.IntVar(&pc.WriterSpanBufferSize,
-		"writer-span-buffer-size",
-		pc.WriterSpanBufferSize,
-		"The size of in-memory buffer for new spans")
-	flag.IntVar(&pc.WriterBatchMaxBytes,
-		"writer-batch-max-bytes",
-		pc.WriterBatchMaxBytes,
-		"The size of ingest batch in bytes")
-	flag.IntVar(&pc.WriterBatchTimeoutSeconds,
-		"writer-batch-timeout-seconds",
-		pc.WriterBatchTimeoutSeconds,
-		"The timeout of ingest batch in seconds")
-}
-
 func main() {
-	pluginConfig := store.NewPluginConfig()
-
-	flags(pluginConfig)
+	configPath := ""
+	flag.StringVar(&configPath, "config", "", "The path to the plugin's configuration file")
 	flag.Parse()
 
+	pluginConfig, err := store.ParseConfig(configPath)
+	if err != nil {
+		os.Exit(1)
+	}
+
 	logger := store.NewLogger(pluginConfig)
-	kustoConfig, err := store.NewKustoConfig(pluginConfig, logger)
+	logger.Debug("plugin config", "config", pluginConfig)
+
+	if pluginConfig.ProfilingEnabled {
+		logger.Debug("starting profiling server at port", "port", pluginConfig.ProfilingPort)
+		go func() {
+			_ = http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", pluginConfig.ProfilingPort), nil)
+		}()
+	}
+
+	kustoConfig, err := store.ParseKustoConfig(pluginConfig.KustoConfigPath)
 	if err != nil {
 		logger.Error("error occurred while reading kusto configuration", "error", err)
 		os.Exit(1)
