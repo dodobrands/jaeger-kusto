@@ -63,19 +63,21 @@ func (kw kustoSpanWriter) ingestCSV() {
 			if !ok {
 				return
 			}
-			if b.Len() > kw.batchMaxBytes {
-				kw.logger.Debug("Ingested batch by size")
+			batchSize := b.Len()
+			if batchSize > kw.batchMaxBytes {
+				kw.logger.Debug("Ingested batch by size", "batchSize", batchSize)
 				kw.ingestBatch(b)
 			}
-			kw.logger.Debug("write spans to buffer", "count", len(spans))
+			kw.logger.Debug("Append spans to batch buffer", "spanCount", len(spans))
 			err := writer.Write(spans)
 			if err != nil {
 				kw.logger.Error("Failed to write csv", "error", err)
 			}
 			writer.Flush()
 		case <-ticker.C:
+			batchSize := b.Len()
 			kw.ingestBatch(b)
-			kw.logger.Debug("Ingested batch by time")
+			kw.logger.Debug("Ingested batch by time", "batchSize", batchSize)
 		}
 	}
 }
