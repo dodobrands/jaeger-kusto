@@ -17,11 +17,11 @@ type kustoIngest interface {
 }
 
 type kustoSpanWriter struct {
-	ingest        kustoIngest
-	ch            chan []string
-	logger        hclog.Logger
 	batchMaxBytes int
 	batchTimeout  time.Duration
+	ingest        kustoIngest
+	logger        hclog.Logger
+	spanInput     chan []string
 }
 
 func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanWriter, error) {
@@ -31,11 +31,11 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 	}
 
 	writer := &kustoSpanWriter{
-		ingest:        in,
-		ch:            make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
-		logger:        logger,
 		batchMaxBytes: factory.PluginConfig.WriterBatchMaxBytes,
 		batchTimeout:  time.Duration(factory.PluginConfig.WriterBatchTimeoutSeconds) * time.Second,
+		ingest:        in,
+		logger:        logger,
+		spanInput:     make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
 	}
 
 	go writer.ingestCSV()
@@ -46,7 +46,7 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 func (kw kustoSpanWriter) WriteSpan(_ context.Context, span *model.Span) error {
 	spanStringArray, err := TransformSpanToStringArray(span)
 
-	kw.ch <- spanStringArray
+	kw.spanInput <- spanStringArray
 	return err
 }
 
@@ -59,7 +59,7 @@ func (kw kustoSpanWriter) ingestCSV() {
 
 	for {
 		select {
-		case spans, ok := <-kw.ch:
+		case spans, ok := <-kw.spanInput:
 			if !ok {
 				return
 			}
