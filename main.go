@@ -26,6 +26,7 @@ func main() {
 	}
 
 	logger := store.NewLogger(pluginConfig)
+	logger.Debug("plugin config", "config", pluginConfig)
 
 	if pluginConfig.ProfilingEnabled {
 		logger.Debug("starting profiling server at port", "port", pluginConfig.ProfilingPort)

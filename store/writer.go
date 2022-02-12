@@ -38,7 +38,7 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 		batchTimeout:  time.Duration(factory.PluginConfig.WriterBatchTimeoutSeconds) * time.Second,
 	}
 
-	go writer.ingestCSV(writer.ch)
+	go writer.ingestCSV()
 
 	return writer, nil
 }
@@ -50,7 +50,7 @@ func (kw kustoSpanWriter) WriteSpan(_ context.Context, span *model.Span) error {
 	return err
 }
 
-func (kw kustoSpanWriter) ingestCSV(ch <-chan []string) {
+func (kw kustoSpanWriter) ingestCSV() {
 	ticker := time.NewTicker(kw.batchTimeout)
 
 	b := &bytes.Buffer{}
@@ -59,14 +59,15 @@ func (kw kustoSpanWriter) ingestCSV(ch <-chan []string) {
 
 	for {
 		select {
-		case spans, ok := <-ch:
+		case spans, ok := <-kw.ch:
 			if !ok {
 				return
 			}
 			if b.Len() > kw.batchMaxBytes {
-				kw.ingestBatch(b)
 				kw.logger.Debug("Ingested batch by size")
+				kw.ingestBatch(b)
 			}
+			kw.logger.Debug("write spans to buffer", "count", len(spans))
 			err := writer.Write(spans)
 			if err != nil {
 				kw.logger.Error("Failed to write csv", "error", err)
