@@ -24,7 +24,7 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 		return err
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", c.RemotePort))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.RemotePort))
 	if err != nil {
 		return err
 	}
