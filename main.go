@@ -8,6 +8,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/dodopizza/jaeger-kusto/store"
 	otGRPC "github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	storageGRPC "github.com/jaegertracing/jaeger/plugin/storage/grpc"
@@ -20,12 +21,12 @@ func main() {
 	flag.StringVar(&configPath, "config", "", "The path to the plugin's configuration file")
 	flag.Parse()
 
-	pluginConfig, err := store.ParseConfig(configPath)
+	pluginConfig, err := config.ParseConfig(configPath)
 	if err != nil {
 		os.Exit(1)
 	}
 
-	logger := store.NewLogger(pluginConfig)
+	logger := config.NewLogger(pluginConfig)
 	logger.Debug("plugin config", "config", pluginConfig)
 
 	if pluginConfig.ProfilingEnabled {
@@ -35,7 +36,7 @@ func main() {
 		}()
 	}
 
-	kustoConfig, err := store.ParseKustoConfig(pluginConfig.KustoConfigPath)
+	kustoConfig, err := config.ParseKustoConfig(pluginConfig.KustoConfigPath)
 	if err != nil {
 		logger.Error("error occurred while reading kusto configuration", "error", err)
 		os.Exit(1)
@@ -47,7 +48,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	pluginTracer, err := store.NewPluginTracer(pluginConfig)
+	pluginTracer, err := config.NewPluginTracer(pluginConfig)
 	if err != nil {
 		logger.Error("error occurred while initializing plugin tracer", "error", err)
 		os.Exit(3)

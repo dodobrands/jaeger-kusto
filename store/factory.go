@@ -3,16 +3,17 @@ package store
 import (
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/ingest"
+	"github.com/dodopizza/jaeger-kusto/config"
 )
 
 type kustoFactory struct {
-	PluginConfig *PluginConfig
+	PluginConfig *config.PluginConfig
 	Database     string
 	Table        string
 	client       *kusto.Client
 }
 
-func newKustoFactory(client *kusto.Client, pc *PluginConfig, database string) *kustoFactory {
+func newKustoFactory(client *kusto.Client, pc *config.PluginConfig, database string) *kustoFactory {
 	return &kustoFactory{
 		client:       client,
 		Database:     database,
