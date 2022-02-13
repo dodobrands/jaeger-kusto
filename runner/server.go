@@ -7,7 +7,7 @@ import (
 	"net"
 )
 
-func ServeServer(c *config.PluginConfig, store shared.StoragePlugin) error {
+func serveServer(c *config.PluginConfig, store shared.StoragePlugin) error {
 	plugin := shared.StorageGRPCPlugin{
 		Impl: store,
 	}

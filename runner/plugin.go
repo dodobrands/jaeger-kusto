@@ -7,7 +7,7 @@ import (
 	googleGRPC "google.golang.org/grpc"
 )
 
-func ServePlugin(c *config.PluginConfig, store shared.StoragePlugin) error {
+func servePlugin(c *config.PluginConfig, store shared.StoragePlugin) error {
 	pluginServices := shared.PluginServices{
 		Store: store,
 	}

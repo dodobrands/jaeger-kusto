@@ -8,13 +8,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-type Runner func(c *config.PluginConfig, store shared.StoragePlugin) error
-
-func ResolveRunner(config *config.PluginConfig) Runner {
-	if config.RemoteMode {
-		return ServeServer
+func Serve(c *config.PluginConfig, store shared.StoragePlugin) error {
+	if c.RemoteMode {
+		return serveServer(c, store)
 	}
-	return ServePlugin
+	return servePlugin(c, store)
 }
 
 func newGRPCServerWithTracer(tracer opentracing.Tracer) *grpc.Server {
