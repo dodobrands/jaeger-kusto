@@ -3,17 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/hashicorp/go-plugin"
+	"github.com/dodopizza/jaeger-kusto/runner"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/dodopizza/jaeger-kusto/store"
-	otGRPC "github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
-	storageGRPC "github.com/jaegertracing/jaeger/plugin/storage/grpc"
-	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
-	googleGRPC "google.golang.org/grpc"
 )
 
 func main() {
@@ -36,6 +32,14 @@ func main() {
 		}()
 	}
 
+	pluginTracer, err := config.NewPluginTracer(pluginConfig)
+	if err != nil {
+		logger.Error("error occurred while initializing plugin tracer", "error", err)
+		os.Exit(3)
+	}
+	pluginTracer.EnableGlobalTracer()
+	defer pluginTracer.Close()
+
 	kustoConfig, err := config.ParseKustoConfig(pluginConfig.KustoConfigPath)
 	if err != nil {
 		logger.Error("error occurred while reading kusto configuration", "error", err)
@@ -48,23 +52,9 @@ func main() {
 		os.Exit(2)
 	}
 
-	pluginTracer, err := config.NewPluginTracer(pluginConfig)
-	if err != nil {
-		logger.Error("error occurred while initializing plugin tracer", "error", err)
-		os.Exit(3)
+	if pluginConfig.ServeServer {
+		runner.ServeServer(kustoStore, pluginTracer)
+	} else {
+		runner.ServePlugin(kustoStore, pluginTracer)
 	}
-	pluginTracer.EnableGlobalTracer()
-	defer pluginTracer.Close()
-
-	pluginServices := shared.PluginServices{
-		Store: kustoStore,
-	}
-
-	storageGRPC.ServeWithGRPCServer(&pluginServices, func(options []googleGRPC.ServerOption) *googleGRPC.Server {
-		so := []googleGRPC.ServerOption{
-			googleGRPC.UnaryInterceptor(otGRPC.OpenTracingServerInterceptor(pluginTracer.Tracer())),
-			googleGRPC.StreamInterceptor(otGRPC.OpenTracingStreamServerInterceptor(pluginTracer.Tracer())),
-		}
-		return plugin.DefaultGRPCServer(so)
-	})
 }

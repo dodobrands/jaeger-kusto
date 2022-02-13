@@ -11,6 +11,7 @@ type PluginConfig struct {
 	LogJson                   bool    `json:"logJson"`
 	ProfilingEnabled          bool    `json:"profilingEnabled"`
 	ProfilingPort             int     `json:"profilingPort"`
+	ServeServer               bool    `json:"serveServer"`
 	TracingSamplerPercentage  float64 `json:"tracingSamplerPercentage"`
 	TracingRPCMetrics         bool    `json:"tracingRPCMetrics"`
 	WriterSpanBufferSize      int     `json:"writerSpanBufferSize"`
@@ -26,6 +27,7 @@ func NewDefaultPluginConfig() *PluginConfig {
 		LogJson:                   false,
 		ProfilingEnabled:          false,
 		ProfilingPort:             6060,
+		ServeServer:               false,
 		TracingSamplerPercentage:  0.0,   // disabled by default
 		TracingRPCMetrics:         false, // disabled by default
 		WriterSpanBufferSize:      100,
