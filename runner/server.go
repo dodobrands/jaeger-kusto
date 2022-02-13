@@ -29,7 +29,7 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 		return err
 	}
 
-	logger.Debug("starting server on addr", "addr", listener.Addr())
+	logger.Info("starting server on addr", "addr", listener.Addr())
 	if err := server.Serve(listener); err != nil {
 		return err
 	}

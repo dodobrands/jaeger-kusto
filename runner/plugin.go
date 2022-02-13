@@ -19,7 +19,7 @@ func servePlugin(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 	}
 	defer closer.Close()
 
-	logger.Debug("starting plugin")
+	logger.Info("starting plugin")
 	storageGRPC.ServeWithGRPCServer(&pluginServices, func(options []googleGRPC.ServerOption) *googleGRPC.Server {
 		return newGRPCServerWithTracer(tracer)
 	})

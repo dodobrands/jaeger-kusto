@@ -23,7 +23,7 @@ func main() {
 	}
 
 	logger := config.NewLogger(pluginConfig)
-	logger.Debug("plugin config", "config", pluginConfig)
+	logger.Info("plugin config", "config", pluginConfig)
 
 	if pluginConfig.ProfilingEnabled {
 		logger.Debug("starting profiling server at port", "port", pluginConfig.ProfilingPort)
