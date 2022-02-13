@@ -4,10 +4,11 @@ import (
 	"github.com/dodopizza/jaeger-kusto/config"
 	ot "github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
+	"github.com/opentracing/opentracing-go"
 	"google.golang.org/grpc"
 )
 
-type Runner func(config *config.PluginConfig, store shared.StoragePlugin, tracer *config.PluginTracer) error
+type Runner func(c *config.PluginConfig, store shared.StoragePlugin) error
 
 func ResolveRunner(config *config.PluginConfig) Runner {
 	if config.RemoteMode {
@@ -16,11 +17,9 @@ func ResolveRunner(config *config.PluginConfig) Runner {
 	return ServePlugin
 }
 
-func newGRPCServerWithTracer(tracer *config.PluginTracer) *grpc.Server {
-	t := tracer.Tracer()
-
+func newGRPCServerWithTracer(tracer opentracing.Tracer) *grpc.Server {
 	return grpc.NewServer(
-		grpc.UnaryInterceptor(ot.OpenTracingServerInterceptor(t)),
-		grpc.StreamInterceptor(ot.OpenTracingStreamServerInterceptor(t)),
+		grpc.UnaryInterceptor(ot.OpenTracingServerInterceptor(tracer)),
+		grpc.StreamInterceptor(ot.OpenTracingStreamServerInterceptor(tracer)),
 	)
 }

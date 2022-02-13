@@ -32,14 +32,6 @@ func main() {
 		}()
 	}
 
-	pluginTracer, err := config.NewPluginTracer(pluginConfig)
-	if err != nil {
-		logger.Error("error occurred while initializing plugin tracer", "error", err)
-		os.Exit(1)
-	}
-	pluginTracer.EnableGlobalTracer()
-	defer pluginTracer.Close()
-
 	kustoConfig, err := config.ParseKustoConfig(pluginConfig.KustoConfigPath)
 	if err != nil {
 		logger.Error("error occurred while reading kusto configuration", "error", err)
@@ -53,8 +45,8 @@ func main() {
 	}
 
 	r := runner.ResolveRunner(pluginConfig)
-	if err := r(pluginConfig, kustoStore, pluginTracer); err != nil {
-		logger.Error("error occurred while starting serve", "error", err)
+	if err := r(pluginConfig, kustoStore); err != nil {
+		logger.Error("error occurred while invoking runner", "error", err)
 		os.Exit(3)
 	}
 }

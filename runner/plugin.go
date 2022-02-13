@@ -7,10 +7,16 @@ import (
 	googleGRPC "google.golang.org/grpc"
 )
 
-func ServePlugin(_ *config.PluginConfig, store shared.StoragePlugin, tracer *config.PluginTracer) error {
+func ServePlugin(c *config.PluginConfig, store shared.StoragePlugin) error {
 	pluginServices := shared.PluginServices{
 		Store: store,
 	}
+
+	tracer, closer, err := config.NewPluginTracer(c)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
 
 	storageGRPC.ServeWithGRPCServer(&pluginServices, func(options []googleGRPC.ServerOption) *googleGRPC.Server {
 		return newGRPCServerWithTracer(tracer)

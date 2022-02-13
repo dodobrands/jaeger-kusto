@@ -7,18 +7,23 @@ import (
 	"net"
 )
 
-func ServeServer(config *config.PluginConfig, store shared.StoragePlugin, tracer *config.PluginTracer) error {
+func ServeServer(c *config.PluginConfig, store shared.StoragePlugin) error {
 	plugin := shared.StorageGRPCPlugin{
 		Impl: store,
 	}
 
-	server := newGRPCServerWithTracer(tracer)
+	tracer, closer, err := config.NewPluginTracer(c)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
 
+	server := newGRPCServerWithTracer(tracer)
 	if err := plugin.GRPCServer(nil, server); err != nil {
 		return err
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.RemotePort))
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", c.RemotePort))
 	if err != nil {
 		return err
 	}

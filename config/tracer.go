@@ -6,12 +6,7 @@ import (
 	"io"
 )
 
-type PluginTracer struct {
-	tracer opentracing.Tracer
-	closer io.Closer
-}
-
-func NewPluginTracer(pc *PluginConfig) (*PluginTracer, error) {
+func NewPluginTracer(pc *PluginConfig) (opentracing.Tracer, io.Closer, error) {
 	c := &config.Configuration{
 		ServiceName: ServiceName,
 		Sampler: &config.SamplerConfig{
@@ -23,20 +18,10 @@ func NewPluginTracer(pc *PluginConfig) (*PluginTracer, error) {
 
 	tracer, closer, err := c.NewTracer()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &PluginTracer{tracer, closer}, nil
-}
+	opentracing.SetGlobalTracer(tracer)
 
-func (pt *PluginTracer) EnableGlobalTracer() {
-	opentracing.SetGlobalTracer(pt.tracer)
-}
-
-func (pt *PluginTracer) Close() error {
-	return pt.closer.Close()
-}
-
-func (pt *PluginTracer) Tracer() opentracing.Tracer {
-	return pt.tracer
+	return tracer, closer, nil
 }
