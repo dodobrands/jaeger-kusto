@@ -1,0 +1,9 @@
+{
+    "kustoConfigPath": "/config/jaeger-kusto-config.json",
+    "logLevel": "info",
+    "logJson": true,
+    "remoteMode": true,
+    "profilingEnabled": true,
+    "tracingSamplerPercentage": 1.0,
+    "tracingRPCMetrics": true
+}

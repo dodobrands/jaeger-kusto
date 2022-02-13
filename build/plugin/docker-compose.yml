@@ -2,7 +2,8 @@ version: "3.8"
 services:
   jaeger:
     build:
-      context: .
+      context: ../..
+      dockerfile: build/plugin/Dockerfile
     restart: "no"
     ports:
       - "5775:5775/udp"
@@ -14,7 +15,7 @@ services:
       - "14268:14268"
       - "14250:14250"
     volumes:
-      - "./jaeger-kusto-config.json:/config/jaeger-kusto-config.json"
+      - "../../jaeger-kusto-config.json:/config/jaeger-kusto-config.json"
       - "./jaeger-kusto-plugin-config.json:/config/jaeger-kusto-plugin-config.json"
     environment:
       "SPAN_STORAGE_TYPE": "grpc-plugin"
