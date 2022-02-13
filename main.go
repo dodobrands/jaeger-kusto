@@ -44,7 +44,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := runner.Serve(pluginConfig, kustoStore); err != nil {
+	if err := runner.Serve(pluginConfig, kustoStore, logger); err != nil {
 		logger.Error("error occurred while invoking runner", "error", err)
 		os.Exit(3)
 	}

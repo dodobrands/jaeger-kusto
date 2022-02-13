@@ -3,11 +3,12 @@ package runner
 import (
 	"fmt"
 	"github.com/dodopizza/jaeger-kusto/config"
+	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 	"net"
 )
 
-func serveServer(c *config.PluginConfig, store shared.StoragePlugin) error {
+func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclog.Logger) error {
 	plugin := shared.StorageGRPCPlugin{
 		Impl: store,
 	}
@@ -28,6 +29,7 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin) error {
 		return err
 	}
 
+	logger.Debug("starting server on addr", "addr", listener.Addr())
 	if err := server.Serve(listener); err != nil {
 		return err
 	}
