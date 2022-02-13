@@ -9,9 +9,10 @@ type PluginConfig struct {
 	KustoConfigPath           string  `json:"kustoConfigPath"`
 	LogLevel                  string  `json:"logLevel"`
 	LogJson                   bool    `json:"logJson"`
+	RemoteMode                bool    `json:"remoteMode"`
+	RemotePort                int     `json:"remotePort"`
 	ProfilingEnabled          bool    `json:"profilingEnabled"`
 	ProfilingPort             int     `json:"profilingPort"`
-	ServeServer               bool    `json:"serveServer"`
 	TracingSamplerPercentage  float64 `json:"tracingSamplerPercentage"`
 	TracingRPCMetrics         bool    `json:"tracingRPCMetrics"`
 	WriterSpanBufferSize      int     `json:"writerSpanBufferSize"`
@@ -25,9 +26,10 @@ func NewDefaultPluginConfig() *PluginConfig {
 		KustoConfigPath:           "",
 		LogLevel:                  "warn",
 		LogJson:                   false,
+		RemoteMode:                false,
+		RemotePort:                8989,
 		ProfilingEnabled:          false,
 		ProfilingPort:             6060,
-		ServeServer:               false,
 		TracingSamplerPercentage:  0.0,   // disabled by default
 		TracingRPCMetrics:         false, // disabled by default
 		WriterSpanBufferSize:      100,

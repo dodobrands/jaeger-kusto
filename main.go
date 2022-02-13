@@ -35,7 +35,7 @@ func main() {
 	pluginTracer, err := config.NewPluginTracer(pluginConfig)
 	if err != nil {
 		logger.Error("error occurred while initializing plugin tracer", "error", err)
-		os.Exit(3)
+		os.Exit(1)
 	}
 	pluginTracer.EnableGlobalTracer()
 	defer pluginTracer.Close()
@@ -52,9 +52,9 @@ func main() {
 		os.Exit(2)
 	}
 
-	if pluginConfig.ServeServer {
-		runner.ServeServer(kustoStore, pluginTracer)
-	} else {
-		runner.ServePlugin(kustoStore, pluginTracer)
+	r := runner.ResolveRunner(pluginConfig)
+	if err := r(pluginConfig, kustoStore, pluginTracer); err != nil {
+		logger.Error("error occurred while starting serve", "error", err)
+		os.Exit(3)
 	}
 }
