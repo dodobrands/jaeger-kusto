@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"fmt"
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
@@ -24,12 +23,12 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 		return err
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.RemotePort))
+	listener, err := net.Listen("tcp", c.RemoteAddress)
 	if err != nil {
 		return err
 	}
 
-	logger.Info("starting server on addr", "addr", listener.Addr())
+	logger.Info("starting server on address", "address", listener.Addr())
 	if err := server.Serve(listener); err != nil {
 		return err
 	}

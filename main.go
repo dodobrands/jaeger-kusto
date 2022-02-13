@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/dodopizza/jaeger-kusto/runner"
 	"net/http"
 	_ "net/http/pprof"
@@ -26,9 +25,9 @@ func main() {
 	logger.Info("plugin config", "config", pluginConfig)
 
 	if pluginConfig.ProfilingEnabled {
-		logger.Debug("starting profiling server at port", "port", pluginConfig.ProfilingPort)
+		logger.Debug("starting profiling server at address", "address", pluginConfig.ProfilingAddress)
 		go func() {
-			_ = http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", pluginConfig.ProfilingPort), nil)
+			_ = http.ListenAndServe(pluginConfig.ProfilingAddress, nil)
 		}()
 	}
 

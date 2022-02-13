@@ -10,9 +10,9 @@ type PluginConfig struct {
 	LogLevel                  string  `json:"logLevel"`
 	LogJson                   bool    `json:"logJson"`
 	RemoteMode                bool    `json:"remoteMode"`
-	RemotePort                int     `json:"remotePort"`
+	RemoteAddress             string  `json:"remoteAddress"`
 	ProfilingEnabled          bool    `json:"profilingEnabled"`
-	ProfilingPort             int     `json:"profilingPort"`
+	ProfilingAddress          string  `json:"profilingAddress"`
 	TracingSamplerPercentage  float64 `json:"tracingSamplerPercentage"`
 	TracingRPCMetrics         bool    `json:"tracingRPCMetrics"`
 	WriterSpanBufferSize      int     `json:"writerSpanBufferSize"`
@@ -27,9 +27,9 @@ func NewDefaultPluginConfig() *PluginConfig {
 		LogLevel:                  "warn",
 		LogJson:                   false,
 		RemoteMode:                false,
-		RemotePort:                8989,
+		RemoteAddress:             ":8989",
 		ProfilingEnabled:          false,
-		ProfilingPort:             6060,
+		ProfilingAddress:          ":6060",
 		TracingSamplerPercentage:  0.0,   // disabled by default
 		TracingRPCMetrics:         false, // disabled by default
 		WriterSpanBufferSize:      100,
