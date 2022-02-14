@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber/jaeger-client-go/config"
 	"io"
+	"os"
 )
 
 func NewPluginTracer(pc *PluginConfig) (opentracing.Tracer, io.Closer, error) {
@@ -14,6 +16,16 @@ func NewPluginTracer(pc *PluginConfig) (opentracing.Tracer, io.Closer, error) {
 			Param: pc.TracingSamplerPercentage,
 		},
 		RPCMetrics: pc.TracingRPCMetrics,
+	}
+
+	agentHost, agentHostExists := os.LookupEnv("JAEGER_AGENT_HOST")
+	agentPort, agentPortExists := os.LookupEnv("JAEGER_AGENT_PORT")
+
+	if agentHostExists && agentPortExists {
+		c.Reporter = &config.ReporterConfig{
+			LogSpans:           true,
+			LocalAgentHostPort: fmt.Sprintf("%s:%s", agentHost, agentPort),
+		}
 	}
 
 	tracer, closer, err := c.NewTracer()
