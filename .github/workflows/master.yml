@@ -35,33 +35,19 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Get dependencies
+      - uses: actions/cache@v2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+              ${{ runner.os }}-go-
+
+      - name: Install dependencies
         run: |
-          go get -v -t -d ./...
-          if [ -f Gopkg.toml ]; then
-              curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-              dep ensure
-          fi
+          go mod download
 
       - name: Build
         run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v .
-
-#       - name: Calc coverage and test
-#         run: |
-#           export PATH=$PATH:$(go env GOPATH)/bin   
-#           go test ./... -v -covermode=count -coverprofile=coverage.out
-
-#       - name: Convert coverage to lcov
-#         uses: jandelgado/gcov2lcov-action@v1.0.2
-#         with:
-#           infile: coverage.out
-#           outfile: coverage.lcov
-
-#       - name: Coveralls
-#         uses: coverallsapp/github-action@master
-#         with:
-#           github-token: ${{ secrets.github_token }}
-#           path-to-lcov: coverage.lcov
 
       - name: Build collector
         uses: docker/build-push-action@v1
