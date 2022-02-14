@@ -10,6 +10,9 @@ services:
     ports:
       - "6060:6060"
       - "8989:8989"
+    environment:
+      "JAEGER_AGENT_HOST": "jaeger"
+      "JAEGER_AGENT_PORT": "6831"
     volumes:
       - "../../jaeger-kusto-config.json:/config/jaeger-kusto-config.json"
       - "./jaeger-kusto-plugin-config.json:/config/jaeger-kusto-plugin-config.json"
