@@ -48,7 +48,12 @@ Then, you should create json config file:
 
 Save this file as `jaeger-kusto-config.json` in the root of repository.
 
-`docker-compose up --build` will build the all-in-one Jaeger container and start it together with Hotrod test app.
+Plugin can be started in one of two modes:
+
+* Standalone app (as grpc server). For this mode, use `docker compose --file build/server/docker-compose.yml up --build`
+* Jaeger collector plugin. For this mode, use `docker compose --file build/plugin/docker-compose.yml up --build`
+
+Any of docker-compose files will use Jaeger all-in-one container and start it together with Hotrod test app.
 
 Jaeger UI will be at <http://localhost:16686/>, Hotrod test app will be at <http://localhost:8080>.
 
@@ -62,4 +67,11 @@ You can check that jaeger-kusto ingestion is working with this query:
 | top 10 by StartedOn
 ```
 
-For production deployment we have these charts: `dodopizza/jaeger-kusto-query` `dodopizza/jaeger-kusto-collector` `dodopizza/jaeger-kusto-agent`. You can view latest tag in docker hub - <https://hub.docker.com/r/dodopizza/jaeger-kusto/tags>
+For production deployment we have these images: 
+
+* [dodopizza/jaeger-kusto-query](https://hub.docker.com/r/dodopizza/jaeger-kusto-query) 
+* [dodopizza/jaeger-kusto-collector](https://hub.docker.com/r/dodopizza/jaeger-kusto-collector)
+* [dodopizza/jaeger-kusto-agent](https://hub.docker.com/r/dodopizza/jaeger-kusto-agent)
+* [dodopizza/jaeger-kusto-plugin](https://hub.docker.com/r/dodopizza/jaeger-kusto-plugin)
+
+You can view latest tag in docker hub
