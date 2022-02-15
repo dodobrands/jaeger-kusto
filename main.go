@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"github.com/dodopizza/jaeger-kusto/runner"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
 
 	"github.com/dodopizza/jaeger-kusto/config"
@@ -24,11 +22,9 @@ func main() {
 	logger := config.NewLogger(pluginConfig)
 	logger.Info("plugin config", "config", pluginConfig)
 
-	if pluginConfig.DiagnosticsProfilingEnabled {
-		logger.Debug("starting profiling server at address", "address", pluginConfig.DiagnosticsListenAddress)
-		go func() {
-			_ = http.ListenAndServe(pluginConfig.DiagnosticsListenAddress, nil)
-		}()
+	if err := config.ServeDiagnosticsServer(pluginConfig, logger); err != nil {
+		logger.Error("error occurred while starting diagnostics server", "error", err)
+		os.Exit(1)
 	}
 
 	kustoConfig, err := config.ParseKustoConfig(pluginConfig.KustoConfigPath)
