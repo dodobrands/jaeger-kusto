@@ -24,10 +24,10 @@ func main() {
 	logger := config.NewLogger(pluginConfig)
 	logger.Info("plugin config", "config", pluginConfig)
 
-	if pluginConfig.ProfilingEnabled {
-		logger.Debug("starting profiling server at address", "address", pluginConfig.ProfilingAddress)
+	if pluginConfig.DiagnosticsProfilingEnabled {
+		logger.Debug("starting profiling server at address", "address", pluginConfig.DiagnosticsListenAddress)
 		go func() {
-			_ = http.ListenAndServe(pluginConfig.ProfilingAddress, nil)
+			_ = http.ListenAndServe(pluginConfig.DiagnosticsListenAddress, nil)
 		}()
 	}
 
