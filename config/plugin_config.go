@@ -10,7 +10,7 @@ type PluginConfig struct {
 	LogLevel                  string  `json:"logLevel"`
 	LogJson                   bool    `json:"logJson"`
 	RemoteMode                bool    `json:"remoteMode"`
-	RemoteAddress             string  `json:"remoteAddress"`
+	RemoteListenAddress       string  `json:"remoteListenAddress"`
 	ProfilingEnabled          bool    `json:"profilingEnabled"`
 	ProfilingAddress          string  `json:"profilingAddress"`
 	TracingSamplerPercentage  float64 `json:"tracingSamplerPercentage"`
@@ -27,7 +27,7 @@ func NewDefaultPluginConfig() *PluginConfig {
 		LogLevel:                  "warn",
 		LogJson:                   false,
 		RemoteMode:                false,
-		RemoteAddress:             ":8989",
+		RemoteListenAddress:       ":8989",
 		ProfilingEnabled:          false,
 		ProfilingAddress:          ":6060",
 		TracingSamplerPercentage:  0.0,   // disabled by default

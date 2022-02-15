@@ -29,7 +29,7 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 		return err
 	}
 
-	listener, err := net.Listen("tcp", c.RemoteAddress)
+	listener, err := net.Listen("tcp", c.RemoteListenAddress)
 	if err != nil {
 		return err
 	}
