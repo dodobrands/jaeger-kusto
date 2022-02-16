@@ -3,7 +3,7 @@ package config
 import (
 	"errors"
 	"github.com/spf13/viper"
-	"io/ioutil"
+	"os"
 )
 
 func load(path string, data interface{}) error {
@@ -11,7 +11,7 @@ func load(path string, data interface{}) error {
 		return errors.New("empty path to config")
 	}
 
-	_, err := ioutil.ReadFile(path)
+	_, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}

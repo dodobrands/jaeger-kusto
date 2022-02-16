@@ -26,7 +26,7 @@ type kustoSpan struct {
 }
 
 const (
-	//TagDotReplacementCharacter state which character should replace the dot in dynamic column
+	// TagDotReplacementCharacter state which character should replace the dot in dynamic column
 	TagDotReplacementCharacter = "_"
 )
 

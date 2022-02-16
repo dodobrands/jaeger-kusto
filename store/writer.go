@@ -23,7 +23,7 @@ type kustoSpanWriter struct {
 	ingest        kustoIngest
 	logger        hclog.Logger
 	spanInput     chan []string
-	shutdown      chan bool
+	shutdown      chan struct{}
 	shutdownWg    sync.WaitGroup
 }
 
@@ -39,7 +39,7 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 		ingest:        in,
 		logger:        logger,
 		spanInput:     make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
-		shutdown:      make(chan bool),
+		shutdown:      make(chan struct{}),
 		shutdownWg:    sync.WaitGroup{},
 	}
 
@@ -59,7 +59,7 @@ func (kw *kustoSpanWriter) Close() error {
 	kw.logger.Debug("plugin shutdown started")
 
 	kw.shutdownWg.Add(1)
-	kw.shutdown <- true
+	kw.shutdown <- struct{}{}
 	kw.shutdownWg.Wait()
 	close(kw.spanInput)
 
@@ -69,6 +69,7 @@ func (kw *kustoSpanWriter) Close() error {
 
 func (kw *kustoSpanWriter) ingestCSV() {
 	ticker := time.NewTicker(kw.batchTimeout)
+	defer ticker.Stop()
 
 	b := &bytes.Buffer{}
 	writer := altcsv.NewWriter(b)
@@ -100,6 +101,7 @@ func (kw *kustoSpanWriter) ingestCSV() {
 			kw.ingestBatch(b)
 			kw.logger.Debug("Ingested batch by shutdown", "batchSize", batchSize)
 			kw.shutdownWg.Done()
+			return
 		}
 	}
 }
@@ -108,12 +110,15 @@ func (kw *kustoSpanWriter) ingestBatch(b *bytes.Buffer) {
 	if b.Len() == 0 {
 		return
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
 	_, err := kw.ingest.FromReader(ctx, b, ingest.FileFormat(ingest.CSV))
-	if err == nil {
-		b.Reset()
-	} else {
+	if err != nil {
 		kw.logger.Error("Failed to ingest to Kusto", "error", err)
+		return
 	}
+
+	b.Reset()
 }
