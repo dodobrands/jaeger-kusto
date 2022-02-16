@@ -2,17 +2,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"github.com/hashicorp/go-plugin"
-	"net/http"
-	_ "net/http/pprof"
+	"github.com/dodopizza/jaeger-kusto/runner"
 	"os"
 
+	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/dodopizza/jaeger-kusto/store"
-	otGRPC "github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
-	storageGRPC "github.com/jaegertracing/jaeger/plugin/storage/grpc"
-	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
-	googleGRPC "google.golang.org/grpc"
 )
 
 func main() {
@@ -20,22 +14,20 @@ func main() {
 	flag.StringVar(&configPath, "config", "", "The path to the plugin's configuration file")
 	flag.Parse()
 
-	pluginConfig, err := store.ParseConfig(configPath)
+	pluginConfig, err := config.ParseConfig(configPath)
 	if err != nil {
 		os.Exit(1)
 	}
 
-	logger := store.NewLogger(pluginConfig)
-	logger.Debug("plugin config", "config", pluginConfig)
+	logger := config.NewLogger(pluginConfig)
+	logger.Info("plugin config", "config", pluginConfig)
 
-	if pluginConfig.ProfilingEnabled {
-		logger.Debug("starting profiling server at port", "port", pluginConfig.ProfilingPort)
-		go func() {
-			_ = http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", pluginConfig.ProfilingPort), nil)
-		}()
+	if err := config.ServeDiagnosticsServer(pluginConfig, logger); err != nil {
+		logger.Error("error occurred while starting diagnostics server", "error", err)
+		os.Exit(1)
 	}
 
-	kustoConfig, err := store.ParseKustoConfig(pluginConfig.KustoConfigPath)
+	kustoConfig, err := config.ParseKustoConfig(pluginConfig.KustoConfigPath)
 	if err != nil {
 		logger.Error("error occurred while reading kusto configuration", "error", err)
 		os.Exit(1)
@@ -47,23 +39,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	pluginTracer, err := store.NewPluginTracer(pluginConfig)
-	if err != nil {
-		logger.Error("error occurred while initializing plugin tracer", "error", err)
+	if err := runner.Serve(pluginConfig, kustoStore, logger); err != nil {
+		logger.Error("error occurred while invoking runner", "error", err)
 		os.Exit(3)
 	}
-	pluginTracer.EnableGlobalTracer()
-	defer pluginTracer.Close()
-
-	pluginServices := shared.PluginServices{
-		Store: kustoStore,
-	}
-
-	storageGRPC.ServeWithGRPCServer(&pluginServices, func(options []googleGRPC.ServerOption) *googleGRPC.Server {
-		so := []googleGRPC.ServerOption{
-			googleGRPC.UnaryInterceptor(otGRPC.OpenTracingServerInterceptor(pluginTracer.Tracer())),
-			googleGRPC.StreamInterceptor(otGRPC.OpenTracingStreamServerInterceptor(pluginTracer.Tracer())),
-		}
-		return plugin.DefaultGRPCServer(so)
-	})
 }

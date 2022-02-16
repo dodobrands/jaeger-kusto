@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"github.com/dodopizza/jaeger-kusto/config"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func TestWriteSpan(tester *testing.T) {
 		}},
 	}
 
-	kustoConfig, _ := ParseKustoConfig(testPluginConfig.KustoConfigPath)
+	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
 	kustoStore, _ := NewStore(testPluginConfig, kustoConfig, logger)
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span))
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span2))
