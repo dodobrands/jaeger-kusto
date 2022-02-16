@@ -1,19 +1,18 @@
-package store
+//go:build integration
+// +build integration
+
+package test
 
 import (
 	"context"
 	"github.com/dodopizza/jaeger-kusto/config"
+	"github.com/dodopizza/jaeger-kusto/store"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jaegertracing/jaeger/model"
-)
-
-const (
-	testOperation = "testOperation"
-	testService   = "testService"
 )
 
 func TestWriteSpan(tester *testing.T) {
@@ -63,7 +62,7 @@ func TestWriteSpan(tester *testing.T) {
 	}
 
 	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
-	kustoStore, _ := NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span))
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span2))
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span3))
