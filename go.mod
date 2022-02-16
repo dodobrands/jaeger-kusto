@@ -7,7 +7,6 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.11
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645
 	github.com/hashicorp/go-hclog v1.1.0
-	github.com/hashicorp/go-plugin v1.4.3
 	github.com/jaegertracing/jaeger v1.31.0
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/spf13/viper v1.10.1
@@ -38,6 +37,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/hashicorp/go-plugin v1.4.3 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/yamux v0.0.0-20190923154419-df201c70410d // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
