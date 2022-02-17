@@ -20,6 +20,7 @@ type kustoIngest interface {
 type kustoSpanWriter struct {
 	batchMaxBytes int
 	batchTimeout  time.Duration
+	workersCount  int
 	ingest        kustoIngest
 	logger        hclog.Logger
 	spanInput     chan []string
@@ -36,6 +37,7 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 	writer := &kustoSpanWriter{
 		batchMaxBytes: factory.PluginConfig.WriterBatchMaxBytes,
 		batchTimeout:  time.Duration(factory.PluginConfig.WriterBatchTimeoutSeconds) * time.Second,
+		workersCount:  factory.PluginConfig.WriterWorkersCount,
 		ingest:        in,
 		logger:        logger,
 		spanInput:     make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
@@ -43,7 +45,9 @@ func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanW
 		shutdownWg:    sync.WaitGroup{},
 	}
 
-	go writer.ingestCSV()
+	for i := 0; i < writer.workersCount; i++ {
+		go writer.ingestWorker()
+	}
 
 	return writer, nil
 }
@@ -58,7 +62,7 @@ func (kw *kustoSpanWriter) WriteSpan(_ context.Context, span *model.Span) error 
 func (kw *kustoSpanWriter) Close() error {
 	kw.logger.Debug("plugin shutdown started")
 
-	kw.shutdownWg.Add(1)
+	kw.shutdownWg.Add(kw.workersCount)
 	kw.shutdown <- struct{}{}
 	kw.shutdownWg.Wait()
 	close(kw.spanInput)
@@ -67,7 +71,7 @@ func (kw *kustoSpanWriter) Close() error {
 	return nil
 }
 
-func (kw *kustoSpanWriter) ingestCSV() {
+func (kw *kustoSpanWriter) ingestWorker() {
 	ticker := time.NewTicker(kw.batchTimeout)
 	defer ticker.Stop()
 
