@@ -1,7 +1,8 @@
 package config
 
 const (
-	ServiceName = "jaeger-kusto"
+	ServiceName             = "jaeger-kusto"
+	PluginEnvironmentPrefix = "JAEGER_KUSTO_PLUGIN"
 )
 
 // PluginConfig contains global options
@@ -15,9 +16,10 @@ type PluginConfig struct {
 	RemoteListenAddress         string  `json:"remoteListenAddress"`
 	TracingSamplerPercentage    float64 `json:"tracingSamplerPercentage"`
 	TracingRPCMetrics           bool    `json:"tracingRPCMetrics"`
-	WriterSpanBufferSize        int     `json:"writerSpanBufferSize"`
 	WriterBatchMaxBytes         int     `json:"writerBatchMaxBytes"`
 	WriterBatchTimeoutSeconds   int     `json:"writerBatchTimeoutSeconds"`
+	WriterSpanBufferSize        int     `json:"writerSpanBufferSize"`
+	WriterWorkersCount          int     `json:"writerWorkersCount"`
 }
 
 // NewDefaultPluginConfig returns default configuration options
@@ -29,12 +31,13 @@ func NewDefaultPluginConfig() *PluginConfig {
 		LogLevel:                    "warn",
 		LogJson:                     false,
 		RemoteMode:                  false,
-		RemoteListenAddress:         ":8989",
-		TracingSamplerPercentage:    0.0,   // disabled by default
-		TracingRPCMetrics:           false, // disabled by default
-		WriterSpanBufferSize:        100,
+		RemoteListenAddress:         "tcp://:8989",
+		TracingSamplerPercentage:    0.0,     // disabled by default
+		TracingRPCMetrics:           false,   // disabled by default
 		WriterBatchMaxBytes:         1048576, // 1 Mb by default
 		WriterBatchTimeoutSeconds:   5,
+		WriterSpanBufferSize:        100,
+		WriterWorkersCount:          5,
 	}
 }
 
@@ -44,5 +47,10 @@ func ParseConfig(path string) (*PluginConfig, error) {
 	if err := load(path, pc); err != nil {
 		return nil, err
 	}
+
+	if err := override(PluginEnvironmentPrefix, pc); err != nil {
+		return nil, err
+	}
+
 	return pc, nil
 }

@@ -1,14 +1,17 @@
 package runner
 
 import (
+	"fmt"
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 	"google.golang.org/grpc"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 )
@@ -29,12 +32,17 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 		return err
 	}
 
-	listener, err := net.Listen("tcp", c.RemoteListenAddress)
+	scheme, address, err := parseListenAddress(c.RemoteListenAddress)
 	if err != nil {
 		return err
 	}
 
-	logger.Info("starting server on address", "address", listener.Addr())
+	listener, err := net.Listen(scheme, address)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("starting server", "address", address, "scheme", scheme)
 	wg := registerGracefulShutdown(server, store, logger)
 	if err := server.Serve(listener); err != nil {
 		return err
@@ -67,4 +75,15 @@ func registerGracefulShutdown(server *grpc.Server, store shared.StoragePlugin, l
 	}()
 
 	return wg
+}
+
+func parseListenAddress(addr string) (scheme, address string, err error) {
+	u, err := url.Parse(addr)
+	if err != nil {
+		return "", "", err
+	}
+
+	proto := fmt.Sprintf("%s://", u.Scheme)
+
+	return u.Scheme, strings.Replace(addr, proto, "", 1), nil
 }
