@@ -1,7 +1,8 @@
 package config
 
 const (
-	ServiceName = "jaeger-kusto"
+	ServiceName             = "jaeger-kusto"
+	PluginEnvironmentPrefix = "JAEGER_KUSTO_PLUGIN"
 )
 
 // PluginConfig contains global options
@@ -47,7 +48,9 @@ func ParseConfig(path string) (*PluginConfig, error) {
 		return nil, err
 	}
 
-	// todo: override with env vars
+	if err := override(PluginEnvironmentPrefix, pc); err != nil {
+		return nil, err
+	}
 
 	return pc, nil
 }
