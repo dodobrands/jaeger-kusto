@@ -30,7 +30,7 @@ func NewDefaultPluginConfig() *PluginConfig {
 		LogLevel:                    "warn",
 		LogJson:                     false,
 		RemoteMode:                  false,
-		RemoteListenAddress:         ":8989",
+		RemoteListenAddress:         "tcp://:8989",
 		TracingSamplerPercentage:    0.0,     // disabled by default
 		TracingRPCMetrics:           false,   // disabled by default
 		WriterBatchMaxBytes:         1048576, // 1 Mb by default
@@ -46,5 +46,8 @@ func ParseConfig(path string) (*PluginConfig, error) {
 	if err := load(path, pc); err != nil {
 		return nil, err
 	}
+
+	// todo: override with env vars
+
 	return pc, nil
 }
