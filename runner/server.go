@@ -37,9 +37,9 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 		return err
 	}
 
-	// perform cleanup for unix domain socket, if it already exists
+	// perform cleanup for unix domain socket, before process exit
 	if scheme == "unix" {
-		_ = os.Remove(address)
+		defer os.Remove(address)
 	}
 
 	listener, err := net.Listen(scheme, address)
