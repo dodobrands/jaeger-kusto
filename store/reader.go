@@ -265,7 +265,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		query.NumTraces = defaultNumTraces
 	}
 
-	kustoStmt := kusto.NewStmt("let TraceIDs = (OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'],Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime))", kusto.UnsafeStmt(safetySwitch))
+	kustoStmt := kusto.NewStmt("let TraceIDs = (OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']),Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime))", kusto.UnsafeStmt(safetySwitch))
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
