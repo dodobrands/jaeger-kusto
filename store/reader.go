@@ -45,7 +45,7 @@ var safetySwitch = unsafe.Stmt{
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kusto.NewStmt("Spans | where TraceID == ParamTraceID").MustDefinitions(
+	kustoStmt := kusto.NewStmt("OTELTraces | where TraceID == ParamTraceID").MustDefinitions(
 		kusto.NewDefinitions().Must(
 			kusto.ParamTypes{
 				"ParamTraceID": kusto.ParamType{Type: types.String},
@@ -82,7 +82,7 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
-	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("set query_results_cache_max_age = time(5m); Spans | summarize by ProcessServiceName | sort by ProcessServiceName asc"))
+	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("set query_results_cache_max_age = time(5m); OTELTraces | summarize by ProcessServiceName | sort by ProcessServiceName asc"))
 	if err != nil {
 		return nil, err
 	}
@@ -119,16 +119,16 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 
 	var kustoStmt kusto.Stmt
 	if query.ServiceName == "" && query.SpanKind == "" {
-		kustoStmt = kusto.NewStmt(`Spans
-| summarize count() by OperationName
+		kustoStmt = kusto.NewStmt(`OTELTraces
+| summarize count() by SpanName
 | sort by count_
 | project-away count_`)
 	}
 
 	if query.ServiceName != "" && query.SpanKind == "" {
-		kustoStmt = kusto.NewStmt(`Spans
+		kustoStmt = kusto.NewStmt(`OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
 | where ProcessServiceName == ParamProcessServiceName
-| summarize count() by OperationName
+| summarize count() by SpanName
 | sort by count_
 | project-away count_`).MustDefinitions(
 			kusto.NewDefinitions().Must(
@@ -176,7 +176,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		TraceID string `kusto:"TraceID"`
 	}
 
-	kustoStmt := kusto.NewStmt("Spans", kusto.UnsafeStmt(safetySwitch))
+	kustoStmt := kusto.NewStmt("OTELTraces | extend Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name'])", kusto.UnsafeStmt(safetySwitch))
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -187,7 +187,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	}
 
 	if query.OperationName != "" {
-		kustoStmt = kustoStmt.Add(` | where OperationName == ParamOperationName`)
+		kustoStmt = kustoStmt.Add(` | where SpanName == ParamOperationName`)
 		kustoDefinitions["ParamOperationName"] = kusto.ParamType{Type: types.String}
 		kustoParameters["ParamOperationName"] = query.OperationName
 	}
@@ -195,7 +195,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	if query.Tags != nil {
 		for k, v := range query.Tags {
 			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
-			tagFilter := fmt.Sprintf(" | where Tags.%s == '%s' or ProcessTags.%s == '%s'", replacedTag, v, replacedTag, v)
+			tagFilter := fmt.Sprintf(" | where TraceAttributes.%s == '%s' or ResourceAttributes.%s == '%s'", replacedTag, v, replacedTag, v)
 			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
 		}
 	}
@@ -265,7 +265,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		query.NumTraces = defaultNumTraces
 	}
 
-	kustoStmt := kusto.NewStmt("let TraceIDs = (Spans", kusto.UnsafeStmt(safetySwitch))
+	kustoStmt := kusto.NewStmt("let TraceIDs = (OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'],Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime))", kusto.UnsafeStmt(safetySwitch))
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -276,7 +276,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	}
 
 	if query.OperationName != "" {
-		kustoStmt = kustoStmt.Add(` | where OperationName == ParamOperationName`)
+		kustoStmt = kustoStmt.Add(` | where SpanName == ParamOperationName`)
 		kustoDefinitions["ParamOperationName"] = kusto.ParamType{Type: types.String}
 		kustoParameters["ParamOperationName"] = query.OperationName
 	}
@@ -284,7 +284,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	if query.Tags != nil {
 		for k, v := range query.Tags {
 			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
-			tagFilter := fmt.Sprintf(" | where Tags.%s == '%s' or ProcessTags.%s == '%s'", replacedTag, v, replacedTag, v)
+			tagFilter := fmt.Sprintf(" | where TraceAttributes%s == '%s' or ResourceAttributes.%s == '%s'", replacedTag, v, replacedTag, v)
 			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
 		}
 	}
@@ -315,7 +315,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
 	kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
 
-	kustoStmt = kustoStmt.Add("); Spans")
+	kustoStmt = kustoStmt.Add("); OTELTraces")
 
 	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
 	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
@@ -374,15 +374,17 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 		CallCount value.Long `kusto:"CallCount"`
 	}
 
-	kustoStmt := kusto.NewStmt(`Spans
-| where StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
-| project ProcessServiceName, SpanID, ChildOfSpanId = tostring(References[0].spanID)
+	kustoStmt := kusto.NewStmt(`OTELTraces 
+| extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
+| StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
+| project ProcessServiceName, SpanID, ChildOfSpanId = ParentID
 | join (Spans | project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId
 | where ProcessServiceName != ParentService
 | extend Call=pack('Parent', ParentService, 'Child', ProcessServiceName)
 | summarize CallCount=count() by tostring(Call)
 | extend Call=parse_json(Call)
-| evaluate bag_unpack(Call)`).MustDefinitions(
+| evaluate bag_unpack(Call)
+	`).MustDefinitions(
 		kusto.NewDefinitions().Must(
 			kusto.ParamTypes{
 				"ParamEndTs":    kusto.ParamType{Type: types.DateTime},
@@ -412,6 +414,5 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 			return nil
 		},
 	)
-
 	return dependencyLinks, err
 }
