@@ -82,7 +82,7 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
-	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("set query_results_cache_max_age = time(5m); OTELTraces | summarize by ProcessServiceName | sort by ProcessServiceName asc"))
+	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("set query_results_cache_max_age = time(5m); OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']) | summarize by ProcessServiceName | sort by ProcessServiceName asc"))
 	if err != nil {
 		return nil, err
 	}
