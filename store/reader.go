@@ -45,7 +45,7 @@ var safetySwitch = unsafe.Stmt{
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kusto.NewStmt("OTELTraces | where TraceID == ParamTraceID").MustDefinitions(
+	kustoStmt := kusto.NewStmt(`OTELTraces | where TraceID == ParamTraceID 	| extend Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`).MustDefinitions(
 		kusto.NewDefinitions().Must(
 			kusto.ParamTypes{
 				"ParamTraceID": kusto.ParamType{Type: types.String},
@@ -66,7 +66,7 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 				return err
 			}
 			var span *model.Span
-			span, err = transformKustoSpanToModelSpan(&rec)
+			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
 			if err != nil {
 				return err
 			}
@@ -315,7 +315,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
 	kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
 
-	kustoStmt = kustoStmt.Add("); OTELTraces")
+	kustoStmt = kustoStmt.Add("); OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']),Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime))")
 
 	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
 	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
@@ -325,9 +325,12 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
 	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
 
-	kustoStmt = kustoStmt.Add(` | where TraceID in (TraceIDs)`)
+	kustoStmt = kustoStmt.Add(` | where TraceID in (TraceIDs) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`)
 
 	kustoStmt = kustoStmt.MustDefinitions(kusto.NewDefinitions().Must(kustoDefinitions)).MustParameters(kusto.NewParameters().Must(kustoParameters))
+
+	r.logger.Debug(kustoStmt.String())
+	r.logger.Debug(kustoStmt.ValuesJSON())
 
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
@@ -346,11 +349,12 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 			}
 
 			var span *model.Span
-			span, err = transformKustoSpanToModelSpan(&rec)
+			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
+			r.logger.Debug("Span ==> " + span.String())
+
 			if err != nil {
 				return err
 			}
-
 			m[span.TraceID] = append(m[span.TraceID], span)
 			return nil
 		},
@@ -360,9 +364,9 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	for _, spanArray := range m {
 		trace := model.Trace{Spans: spanArray}
+		r.logger.Debug("Trace ==> " + trace.String())
 		traces = append(traces, &trace)
 	}
-
 	return traces, err
 }
 

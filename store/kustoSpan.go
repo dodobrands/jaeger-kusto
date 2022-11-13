@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
+	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/plugin/storage/es/spanstore/dbmodel"
 )
@@ -30,37 +31,35 @@ const (
 	TagDotReplacementCharacter = "_"
 )
 
-func transformKustoSpanToModelSpan(kustoSpan *kustoSpan) (*model.Span, error) {
+func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*model.Span, error) {
 
 	var refs []dbmodel.Reference
 	err := json.Unmarshal(kustoSpan.References.Value, &refs)
 	if err != nil {
 		return nil, err
 	}
-
 	var tags map[string]interface{}
 	err = json.Unmarshal(kustoSpan.Tags.Value, &tags)
 	if err != nil {
 		return nil, err
 	}
-
+	// TODO - This needs to get fixed !! Logs need more work on - Events needs - TODO //
 	var logs []dbmodel.Log
-	err = json.Unmarshal(kustoSpan.Logs.Value, &logs)
-	if err != nil {
-		return nil, err
-	}
-
+	/*
+	   err = json.Unmarshal(kustoSpan.Logs.Value, &logs)
+	   if err != nil {
+	   	return nil, err
+	   }
+	*/
 	process := dbmodel.Process{
 		ServiceName: kustoSpan.ProcessServiceName,
 		Tags:        nil,
 		Tag:         nil,
 	}
-
 	err = json.Unmarshal(kustoSpan.ProcessTags.Value, &process.Tag)
 	if err != nil {
 		return nil, err
 	}
-
 	jsonSpan := &dbmodel.Span{
 		TraceID:         dbmodel.TraceID(kustoSpan.TraceID),
 		SpanID:          dbmodel.SpanID(kustoSpan.SpanID),
@@ -75,13 +74,12 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan) (*model.Span, error) {
 		Logs:            logs,
 		Process:         process,
 	}
-
 	spanConverter := dbmodel.NewToDomain(TagDotReplacementCharacter)
 	convertedSpan, err := spanConverter.SpanToDomain(jsonSpan)
 	if err != nil {
+		logger.Warn("Step-8 Failure ==> " + err.Error())
 		return nil, err
 	}
-
 	span := &model.Span{
 		TraceID:       convertedSpan.TraceID,
 		SpanID:        convertedSpan.SpanID,
@@ -94,7 +92,6 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan) (*model.Span, error) {
 		Logs:          convertedSpan.Logs,
 		Process:       convertedSpan.Process,
 	}
-
 	return span, err
 }
 
