@@ -380,7 +380,7 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 
 	kustoStmt := kusto.NewStmt(`OTELTraces 
 | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
-| StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
+| where StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
 | project ProcessServiceName, SpanID, ChildOfSpanId = ParentID
 | join (Spans | project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId
 | where ProcessServiceName != ParentService
