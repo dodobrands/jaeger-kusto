@@ -32,7 +32,6 @@ const (
 )
 
 func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*model.Span, error) {
-
 	var refs []dbmodel.Reference
 	err := json.Unmarshal(kustoSpan.References.Value, &refs)
 	if err != nil {
@@ -77,7 +76,7 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 	spanConverter := dbmodel.NewToDomain(TagDotReplacementCharacter)
 	convertedSpan, err := spanConverter.SpanToDomain(jsonSpan)
 	if err != nil {
-		logger.Warn("Step-8 Failure ==> " + err.Error())
+		logger.Warn("Step-8b Failure ==> " + err.Error())
 		return nil, err
 	}
 	span := &model.Span{
