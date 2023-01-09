@@ -2,7 +2,6 @@ package store
 
 import (
 	"github.com/Azure/azure-kusto-go/kusto"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
@@ -18,15 +17,9 @@ type store struct {
 
 // NewStore creates new Kusto store for Jaeger span storage
 func NewStore(pc *config.PluginConfig, kc *config.KustoConfig, logger hclog.Logger) (shared.StoragePlugin, error) {
-	authorizer := kusto.Authorization{
-		Config: auth.NewClientCredentialsConfig(
-			kc.ClientID,
-			kc.ClientSecret,
-			kc.TenantID,
-		),
-	}
 
-	client, err := kusto.New(kc.Endpoint, authorizer)
+	kcsb := kusto.NewConnectionStringBuilder(kc.Endpoint).WithAadAppKey(kc.ClientID, kc.ClientSecret, kc.TenantID)
+	client, err := kusto.New(kcsb)
 	if err != nil {
 		return nil, err
 	}

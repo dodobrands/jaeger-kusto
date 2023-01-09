@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -32,7 +33,6 @@ const (
 )
 
 func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*model.Span, error) {
-
 	var refs []dbmodel.Reference
 	err := json.Unmarshal(kustoSpan.References.Value, &refs)
 	if err != nil {
@@ -40,6 +40,16 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 	}
 	var tags map[string]interface{}
 	err = json.Unmarshal(kustoSpan.Tags.Value, &tags)
+
+	/* Fix issues where there are JSON Array types in tags. On nested tag types convert arrays to string. Else this causes issues in span parsing in Jaeger span transformations*/
+	for key, element := range tags {
+		elementString := fmt.Sprint(element)
+		isArray := len(elementString) > 0 && elementString[0] == '['
+		if isArray {
+			tags[key] = elementString
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -66,9 +76,9 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 		Flags:           uint32(kustoSpan.Flags),
 		OperationName:   "",
 		References:      refs,
-		StartTime:       0,
-		StartTimeMillis: 0,
-		Duration:        0,
+		StartTime:       uint64(kustoSpan.StartTime.UnixMilli()),
+		StartTimeMillis: uint64(kustoSpan.StartTime.UnixMilli()),
+		Duration:        uint64(kustoSpan.Duration.Microseconds()),
 		Tags:            nil,
 		Tag:             tags,
 		Logs:            logs,
@@ -77,7 +87,7 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 	spanConverter := dbmodel.NewToDomain(TagDotReplacementCharacter)
 	convertedSpan, err := spanConverter.SpanToDomain(jsonSpan)
 	if err != nil {
-		logger.Warn("Step-8 Failure ==> " + err.Error())
+		logger.Error(fmt.Sprintf("Error parsing span to domain. Error %s. The TraceId is %s and the SpanId is %s ", err, kustoSpan.TraceID, kustoSpan.SpanID))
 		return nil, err
 	}
 	span := &model.Span{
@@ -105,10 +115,8 @@ func getTagsValues(tags []model.KeyValue) []string {
 
 // TransformSpanToStringArray converts span to string ready for Kusto ingestion
 func TransformSpanToStringArray(span *model.Span) ([]string, error) {
-
 	spanConverter := dbmodel.NewFromDomain(true, getTagsValues(span.Tags), TagDotReplacementCharacter)
 	jsonSpan := spanConverter.FromDomainEmbedProcess(span)
-
 	references, err := json.Marshal(jsonSpan.References)
 	if err != nil {
 		return nil, err

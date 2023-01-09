@@ -17,7 +17,7 @@ func newKustoFactory(client *kusto.Client, pc *config.PluginConfig, database str
 	return &kustoFactory{
 		client:       client,
 		Database:     database,
-		Table:        "Spans",
+		Table:        "OTELTraces",
 		PluginConfig: pc,
 	}
 }
