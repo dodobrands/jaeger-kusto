@@ -45,7 +45,7 @@ var safetySwitch = unsafe.Stmt{
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kusto.NewStmt(`OTELTraces | where TraceID == ParamTraceID 	| extend Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`).MustDefinitions(
+	kustoStmt := kusto.NewStmt(`OTELTraces | where TraceID == ParamTraceID 	| extend Duration=totimespan(datetime_diff('microsecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`).MustDefinitions(
 		kusto.NewDefinitions().Must(
 			kusto.ParamTypes{
 				"ParamTraceID": kusto.ParamType{Type: types.String},
@@ -176,7 +176,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		TraceID string `kusto:"TraceID"`
 	}
 
-	kustoStmt := kusto.NewStmt("OTELTraces | extend Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name'])", kusto.UnsafeStmt(safetySwitch))
+	kustoStmt := kusto.NewStmt("OTELTraces | extend Duration=totimespan(datetime_diff('microsecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name'])", kusto.UnsafeStmt(safetySwitch))
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -378,15 +378,11 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 		CallCount value.Long `kusto:"CallCount"`
 	}
 
-	kustoStmt := kusto.NewStmt(`OTELTraces 
-| extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
+	kustoStmt := kusto.NewStmt(`OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
 | where StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
-| project ProcessServiceName, SpanID, ChildOfSpanId = ParentID
-| join (Spans | project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId
-| where ProcessServiceName != ParentService
-| extend Call=pack('Parent', ParentService, 'Child', ProcessServiceName)
-| summarize CallCount=count() by tostring(Call)
-| extend Call=parse_json(Call)
+| project ProcessServiceName, SpanID, ChildOfSpanId = ParentID | join (OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
+| project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId | where ProcessServiceName != ParentService
+| extend Call=pack('Parent', ParentService, 'Child', ProcessServiceName) | summarize CallCount=count() by tostring(Call) | extend Call=parse_json(Call)
 | evaluate bag_unpack(Call)
 	`).MustDefinitions(
 		kusto.NewDefinitions().Must(
@@ -395,7 +391,6 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 				"ParamLookBack": kusto.ParamType{Type: types.Timespan},
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
-
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
