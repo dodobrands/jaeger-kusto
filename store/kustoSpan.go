@@ -3,7 +3,9 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
@@ -27,6 +29,12 @@ type kustoSpan struct {
 	ProcessID          string        `kusto:"ProcessID"`
 }
 
+type event struct {
+	EventName       string                 `kusto:"EventName"`
+	Timestamp       string                 `kusto:"Timestamp"`
+	EventAttributes map[string]interface{} `kusto:"EventAttributes"`
+}
+
 const (
 	// TagDotReplacementCharacter state which character should replace the dot in dynamic column
 	TagDotReplacementCharacter = "_"
@@ -40,7 +48,6 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 	}
 	var tags map[string]interface{}
 	err = json.Unmarshal(kustoSpan.Tags.Value, &tags)
-
 	/* Fix issues where there are JSON Array types in tags. On nested tag types convert arrays to string. Else this causes issues in span parsing in Jaeger span transformations*/
 	for key, element := range tags {
 		elementString := fmt.Sprint(element)
@@ -49,18 +56,44 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 			tags[key] = elementString
 		}
 	}
-
 	if err != nil {
 		return nil, err
 	}
 	// TODO - This needs to get fixed !! Logs need more work on - Events needs - TODO //
-	var logs []dbmodel.Log
-	/*
-	   err = json.Unmarshal(kustoSpan.Logs.Value, &logs)
-	   if err != nil {
-	   	return nil, err
-	   }
-	*/
+
+	var events []event
+	err = json.Unmarshal(kustoSpan.Logs.Value, &events)
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Error de-serializing data %s. The TraceId is %s and the SpanId is %s ", kustoSpan.Logs.String(), kustoSpan.TraceID, kustoSpan.SpanID))
+		return nil, err
+	}
+	logs := make([]dbmodel.Log, len(events))
+	/*Convert event to logs that can be set*/
+	for _, evt := range events {
+		log := dbmodel.Log{}
+		kvs := make([]dbmodel.KeyValue, len(events))
+		timestamp := evt.Timestamp
+		if timestamp != "" {
+			t, terr := time.Parse(time.RFC3339Nano, timestamp)
+			if terr != nil {
+				logger.Warn(fmt.Sprintf("Error parsing log timestamp. Error %s. The TraceId is %s and the SpanId is %s & timestamp is %s ", terr.Error(), kustoSpan.TraceID, kustoSpan.SpanID, timestamp))
+			} else {
+				logger.Warn(fmt.Sprintf("Timestamp %d and Timestamp2 %d", t.UnixMicro(), kustoSpan.StartTime.UnixMicro()))
+				relativeTimeLag = t.UnixMicro() - kustoSpan.StartTime.UnixMicro()
+				log.Timestamp = uint64(relativeTimeLag)
+			}
+		}
+		for ek, ev := range evt.EventAttributes {
+			kv := dbmodel.KeyValue{
+				Key:   ek,
+				Value: ev,
+				Type:  dbmodel.ValueType(strings.ToLower(reflect.TypeOf(ev).String())),
+			}
+			kvs = append(kvs, kv)
+		}
+		log.Fields = kvs
+	}
+
 	process := dbmodel.Process{
 		ServiceName: kustoSpan.ProcessServiceName,
 		Tags:        nil,

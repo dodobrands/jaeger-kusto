@@ -6,11 +6,12 @@ import (
 
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
 type KustoConfig struct {
-	ClientID     string `json:"clientId"`
-	ClientSecret string `json:"clientSecret"`
-	TenantID     string `json:"tenantId"`
-	Endpoint     string `json:"endpoint"`
-	Database     string `json:"database"`
+	ClientID       string `json:"clientId"`
+	ClientSecret   string `json:"clientSecret"`
+	TenantID       string `json:"tenantId"`
+	Endpoint       string `json:"endpoint"`
+	Database       string `json:"database"`
+	TraceTableName string `json:"traceTable"`
 }
 
 // ParseKustoConfig reads file at path and returns instance of KustoConfig or error
