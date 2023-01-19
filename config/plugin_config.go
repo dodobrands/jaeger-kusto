@@ -20,6 +20,7 @@ type PluginConfig struct {
 	WriterBatchTimeoutSeconds   int     `json:"writerBatchTimeoutSeconds"`
 	WriterSpanBufferSize        int     `json:"writerSpanBufferSize"`
 	WriterWorkersCount          int     `json:"writerWorkersCount"`
+	DisableJaegerUiTraces       bool    `json:"disableJaegerUiTraces"`
 }
 
 // NewDefaultPluginConfig returns default configuration options
@@ -38,6 +39,7 @@ func NewDefaultPluginConfig() *PluginConfig {
 		WriterBatchTimeoutSeconds:   5,
 		WriterSpanBufferSize:        100,
 		WriterWorkersCount:          5,
+		DisableJaegerUiTraces:       true, //disable UI logs of jaeger into OTELTraces. No traces from Jaeger UI will be sent
 	}
 }
 

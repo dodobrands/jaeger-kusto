@@ -31,7 +31,7 @@ func NewStore(pc *config.PluginConfig, kc *config.KustoConfig, logger hclog.Logg
 		return nil, err
 	}
 
-	writer, err := newKustoSpanWriter(factory, logger)
+	writer, err := newKustoSpanWriter(factory, logger, pc)
 	if err != nil {
 		return nil, err
 	}

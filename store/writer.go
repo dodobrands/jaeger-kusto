@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/ingest"
+	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/tushar2708/altcsv"
@@ -18,31 +19,33 @@ type kustoIngest interface {
 }
 
 type kustoSpanWriter struct {
-	batchMaxBytes int
-	batchTimeout  time.Duration
-	workersCount  int
-	ingest        kustoIngest
-	logger        hclog.Logger
-	spanInput     chan []string
-	shutdown      chan struct{}
-	shutdownWg    sync.WaitGroup
+	batchMaxBytes         int
+	batchTimeout          time.Duration
+	workersCount          int
+	ingest                kustoIngest
+	logger                hclog.Logger
+	spanInput             chan []string
+	shutdown              chan struct{}
+	shutdownWg            sync.WaitGroup
+	disableJaegerUiTraces bool
 }
 
-func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger) (*kustoSpanWriter, error) {
+func newKustoSpanWriter(factory *kustoFactory, logger hclog.Logger, pc *config.PluginConfig) (*kustoSpanWriter, error) {
 	in, err := factory.Ingest()
 	if err != nil {
 		return nil, err
 	}
 
 	writer := &kustoSpanWriter{
-		batchMaxBytes: factory.PluginConfig.WriterBatchMaxBytes,
-		batchTimeout:  time.Duration(factory.PluginConfig.WriterBatchTimeoutSeconds) * time.Second,
-		workersCount:  factory.PluginConfig.WriterWorkersCount,
-		ingest:        in,
-		logger:        logger,
-		spanInput:     make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
-		shutdown:      make(chan struct{}),
-		shutdownWg:    sync.WaitGroup{},
+		batchMaxBytes:         factory.PluginConfig.WriterBatchMaxBytes,
+		batchTimeout:          time.Duration(factory.PluginConfig.WriterBatchTimeoutSeconds) * time.Second,
+		workersCount:          factory.PluginConfig.WriterWorkersCount,
+		ingest:                in,
+		logger:                logger,
+		spanInput:             make(chan []string, factory.PluginConfig.WriterSpanBufferSize),
+		shutdown:              make(chan struct{}),
+		shutdownWg:            sync.WaitGroup{},
+		disableJaegerUiTraces: pc.DisableJaegerUiTraces,
 	}
 
 	for i := 0; i < writer.workersCount; i++ {
@@ -111,6 +114,10 @@ func (kw *kustoSpanWriter) ingestWorker() {
 }
 
 func (kw *kustoSpanWriter) ingestBatch(b *bytes.Buffer) {
+	// Disable the write from Jaeger UI
+	if kw.disableJaegerUiTraces {
+		return
+	}
 	if b.Len() == 0 {
 		return
 	}
