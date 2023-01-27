@@ -48,7 +48,7 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 	}
 	var tags map[string]interface{}
 	err = json.Unmarshal(kustoSpan.Tags.Value, &tags)
-	/* Fix issues where there are JSON Array types in tags. On nested tag types convert arrays to string. Else this causes issues in span parsing in Jaeger span transformations*/
+	// Fix issues where there are JSON Array types in tags. On nested tag types convert arrays to string. Else this causes issues in span parsing in Jaeger span transformations
 	for key, element := range tags {
 		elementString := fmt.Sprint(element)
 		isArray := len(elementString) > 0 && elementString[0] == '['
@@ -59,7 +59,6 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 	if err != nil {
 		return nil, err
 	}
-	// TODO - This needs to get fixed !! Logs need more work on - Events needs - TODO //
 
 	var events []event
 	err = json.Unmarshal(kustoSpan.Logs.Value, &events)
@@ -68,7 +67,9 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 		return nil, err
 	}
 	var logs []dbmodel.Log
-	/*Convert event to logs that can be set*/
+
+	// Map event to logs that can be set. ref: https://opentelemetry.io/docs/reference/specification/trace/sdk_exporters/jaeger/#events
+	// Set all the events' timestam and attibute, to log's timestamp and fields by iterating over span events
 	for _, evt := range events {
 		log := dbmodel.Log{}
 		var kvs []dbmodel.KeyValue
@@ -81,6 +82,8 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 				log.Timestamp = uint64(t.UnixMicro())
 			}
 		}
+
+		// EventName should be added as log's field.
 		kvs = append(kvs, dbmodel.KeyValue{
 			Key:   "event",
 			Value: evt.EventName,

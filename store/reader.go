@@ -51,7 +51,6 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 				"ParamTraceID": kusto.ParamType{Type: types.String},
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
-	r.logger.Warn("*****************Searching for traceid*****************" + traceID.String())
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
