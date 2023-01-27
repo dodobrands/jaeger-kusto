@@ -67,31 +67,35 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 		logger.Warn(fmt.Sprintf("Error de-serializing data %s. The TraceId is %s and the SpanId is %s ", kustoSpan.Logs.String(), kustoSpan.TraceID, kustoSpan.SpanID))
 		return nil, err
 	}
-	logs := make([]dbmodel.Log, len(events))
+	var logs []dbmodel.Log
 	/*Convert event to logs that can be set*/
 	for _, evt := range events {
 		log := dbmodel.Log{}
-		kvs := make([]dbmodel.KeyValue, len(events))
+		var kvs []dbmodel.KeyValue
 		timestamp := evt.Timestamp
 		if timestamp != "" {
 			t, terr := time.Parse(time.RFC3339Nano, timestamp)
 			if terr != nil {
 				logger.Warn(fmt.Sprintf("Error parsing log timestamp. Error %s. The TraceId is %s and the SpanId is %s & timestamp is %s ", terr.Error(), kustoSpan.TraceID, kustoSpan.SpanID, timestamp))
 			} else {
-				logger.Warn(fmt.Sprintf("Timestamp %d and Timestamp2 %d", t.UnixMicro(), kustoSpan.StartTime.UnixMicro()))
-				relativeTimeLag = t.UnixMicro() - kustoSpan.StartTime.UnixMicro()
-				log.Timestamp = uint64(relativeTimeLag)
+				log.Timestamp = uint64(t.UnixMicro())
 			}
 		}
+		kvs = append(kvs, dbmodel.KeyValue{
+			Key:   "event",
+			Value: evt.EventName,
+			Type:  dbmodel.StringType,
+		})
 		for ek, ev := range evt.EventAttributes {
 			kv := dbmodel.KeyValue{
 				Key:   ek,
-				Value: ev,
+				Value: fmt.Sprint(ev),
 				Type:  dbmodel.ValueType(strings.ToLower(reflect.TypeOf(ev).String())),
 			}
 			kvs = append(kvs, kv)
 		}
 		log.Fields = kvs
+		logs = append(logs, log)
 	}
 
 	process := dbmodel.Process{
