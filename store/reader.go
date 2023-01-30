@@ -12,6 +12,7 @@ import (
 	"github.com/Azure/azure-kusto-go/kusto/unsafe"
 
 	"github.com/Azure/azure-kusto-go/kusto"
+	"github.com/Azure/azure-kusto-go/kusto/data/errors"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
 	"github.com/Azure/azure-kusto-go/kusto/data/types"
 	"github.com/jaegertracing/jaeger/model"
@@ -74,8 +75,11 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 	defer iter.Stop()
 
 	var spans []*model.Span
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := kustoSpan{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
@@ -108,8 +112,11 @@ func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 	}
 
 	var services []string
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			service := Service{}
 			if err := row.ToStruct(&service); err != nil {
 				return err
@@ -154,8 +161,11 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 	defer iter.Stop()
 
 	operations := []spanstore.Operation{}
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			operation := Operation{}
 			if err := row.ToStruct(&operation); err != nil {
 				return err
@@ -246,8 +256,11 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	defer iter.Stop()
 
 	var traceIds []model.TraceID
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := TraceID{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
@@ -349,9 +362,11 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	m := make(map[model.TraceID][]*model.Span)
 
-	err = iter.Do(
-		func(row *table.Row) error {
-
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := kustoSpan{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
@@ -402,8 +417,11 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 	defer iter.Stop()
 
 	var dependencyLinks []model.DependencyLink
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := kustoDependencyLink{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
