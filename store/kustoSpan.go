@@ -3,7 +3,9 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
@@ -27,6 +29,12 @@ type kustoSpan struct {
 	ProcessID          string        `kusto:"ProcessID"`
 }
 
+type event struct {
+	EventName       string                 `kusto:"EventName"`
+	Timestamp       string                 `kusto:"Timestamp"`
+	EventAttributes map[string]interface{} `kusto:"EventAttributes"`
+}
+
 const (
 	// TagDotReplacementCharacter state which character should replace the dot in dynamic column
 	TagDotReplacementCharacter = "_"
@@ -40,8 +48,7 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 	}
 	var tags map[string]interface{}
 	err = json.Unmarshal(kustoSpan.Tags.Value, &tags)
-
-	/* Fix issues where there are JSON Array types in tags. On nested tag types convert arrays to string. Else this causes issues in span parsing in Jaeger span transformations*/
+	// Fix issues where there are JSON Array types in tags. On nested tag types convert arrays to string. Else this causes issues in span parsing in Jaeger span transformations
 	for key, element := range tags {
 		elementString := fmt.Sprint(element)
 		isArray := len(elementString) > 0 && elementString[0] == '['
@@ -49,18 +56,51 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 			tags[key] = elementString
 		}
 	}
-
 	if err != nil {
 		return nil, err
 	}
-	// TODO - This needs to get fixed !! Logs need more work on - Events needs - TODO //
+
+	var events []event
+	err = json.Unmarshal(kustoSpan.Logs.Value, &events)
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Error de-serializing data %s. The TraceId is %s and the SpanId is %s ", kustoSpan.Logs.String(), kustoSpan.TraceID, kustoSpan.SpanID))
+		return nil, err
+	}
 	var logs []dbmodel.Log
-	/*
-	   err = json.Unmarshal(kustoSpan.Logs.Value, &logs)
-	   if err != nil {
-	   	return nil, err
-	   }
-	*/
+
+	// Map event to logs that can be set. ref: https://opentelemetry.io/docs/reference/specification/trace/sdk_exporters/jaeger/#events
+	// Set all the events' timestam and attibute, to log's timestamp and fields by iterating over span events
+	for _, evt := range events {
+		log := dbmodel.Log{}
+		var kvs []dbmodel.KeyValue
+		timestamp := evt.Timestamp
+		if timestamp != "" {
+			t, terr := time.Parse(time.RFC3339Nano, timestamp)
+			if terr != nil {
+				logger.Warn(fmt.Sprintf("Error parsing log timestamp. Error %s. The TraceId is %s and the SpanId is %s & timestamp is %s ", terr.Error(), kustoSpan.TraceID, kustoSpan.SpanID, timestamp))
+			} else {
+				log.Timestamp = uint64(t.UnixMicro())
+			}
+		}
+
+		// EventName should be added as log's field.
+		kvs = append(kvs, dbmodel.KeyValue{
+			Key:   "event",
+			Value: evt.EventName,
+			Type:  dbmodel.StringType,
+		})
+		for ek, ev := range evt.EventAttributes {
+			kv := dbmodel.KeyValue{
+				Key:   ek,
+				Value: fmt.Sprint(ev),
+				Type:  dbmodel.ValueType(strings.ToLower(reflect.TypeOf(ev).String())),
+			}
+			kvs = append(kvs, kv)
+		}
+		log.Fields = kvs
+		logs = append(logs, log)
+	}
+
 	process := dbmodel.Process{
 		ServiceName: kustoSpan.ProcessServiceName,
 		Tags:        nil,
