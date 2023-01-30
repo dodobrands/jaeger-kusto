@@ -4,6 +4,6 @@
     "logLevel": "info",
     "logJson": true,
     "remoteMode": true,
-    "tracingSamplerPercentage": 1.0,
-    "tracingRPCMetrics": true
+    "tracingSamplerPercentage": 0.0,
+    "tracingRPCMetrics": false
 }
