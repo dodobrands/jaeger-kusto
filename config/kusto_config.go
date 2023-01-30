@@ -6,11 +6,12 @@ import (
 
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
 type KustoConfig struct {
-	ClientID     string `json:"clientId"`
-	ClientSecret string `json:"clientSecret"`
-	TenantID     string `json:"tenantId"`
-	Endpoint     string `json:"endpoint"`
-	Database     string `json:"database"`
+	ClientID       string `json:"clientId"`
+	ClientSecret   string `json:"clientSecret"`
+	TenantID       string `json:"tenantId"`
+	Endpoint       string `json:"endpoint"`
+	Database       string `json:"database"`
+	TraceTableName string `json:"traceTableName"`
 }
 
 // ParseKustoConfig reads file at path and returns instance of KustoConfig or error
@@ -38,6 +39,10 @@ func (kc *KustoConfig) Validate() error {
 	}
 	if kc.ClientID == "" || kc.ClientSecret == "" || kc.TenantID == "" {
 		return errors.New("missing client configuration (ClientId, ClientSecret, TenantId) for kusto")
+	}
+	//if no Tracetable name provided, default to OTELTraces.
+	if kc.TraceTableName == "" {
+		kc.TraceTableName = "OTELTraces"
 	}
 	return nil
 }

@@ -24,7 +24,8 @@ func NewStore(pc *config.PluginConfig, kc *config.KustoConfig, logger hclog.Logg
 		return nil, err
 	}
 
-	factory := newKustoFactory(client, pc, kc.Database)
+	// create factory for trace table opertations
+	factory := newKustoFactory(client, pc, kc.Database, kc.TraceTableName)
 
 	reader, err := newKustoSpanReader(factory, logger)
 	if err != nil {
