@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -67,6 +68,9 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 				"ParamTraceID": kusto.ParamType{Type: types.String},
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
+
+	log.Default().Println(kustoStmt.String())
+
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
@@ -100,7 +104,11 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
-	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getServices]))
+
+	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getServices])
+	log.Default().Println(kustoStmt.String())
+	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+
 	if err != nil {
 		return nil, err
 	}
