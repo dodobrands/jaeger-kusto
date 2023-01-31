@@ -50,7 +50,7 @@ func prepareReaderStatements(tableName string) {
 	queryMap[getOpsWithParams] = fmt.Sprintf(getOpsWithParamsQuery, tableName)
 	queryMap[getDependencies] = fmt.Sprintf(getDependenciesQuery, tableName, tableName)
 	queryMap[getTraceIdBase] = fmt.Sprintf(getTraceIdBaseQuery, tableName)
-	queryMap[getTracesBase] = fmt.Sprintf(getTraceIdBaseQuery, tableName)
+	queryMap[getTracesBase] = fmt.Sprintf(getTracesBaseQuery, tableName)
 }
 
 const defaultNumTraces = 20
