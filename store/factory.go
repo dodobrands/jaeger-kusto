@@ -13,11 +13,11 @@ type kustoFactory struct {
 	client       *kusto.Client
 }
 
-func newKustoFactory(client *kusto.Client, pc *config.PluginConfig, database string) *kustoFactory {
+func newKustoFactory(client *kusto.Client, pc *config.PluginConfig, database string, table string) *kustoFactory {
 	return &kustoFactory{
 		client:       client,
 		Database:     database,
-		Table:        "OTELTraces",
+		Table:        table,
 		PluginConfig: pc,
 	}
 }

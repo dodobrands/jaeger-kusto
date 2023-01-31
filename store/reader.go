@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/Azure/azure-kusto-go/kusto/unsafe"
 
 	"github.com/Azure/azure-kusto-go/kusto"
+	"github.com/Azure/azure-kusto-go/kusto/data/errors"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
 	"github.com/Azure/azure-kusto-go/kusto/data/types"
 	"github.com/jaegertracing/jaeger/model"
@@ -28,12 +30,27 @@ type kustoReaderClient interface {
 	Query(ctx context.Context, db string, query kusto.Stmt, options ...kusto.QueryOption) (*kusto.RowIterator, error)
 }
 
+var queryMap = map[string]string{}
+
 func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger) (*kustoSpanReader, error) {
+	prepareReaderStatements(factory.Table)
 	return &kustoSpanReader{
 		factory.Reader(),
 		factory.Database,
 		logger,
 	}, nil
+}
+
+// Prepares reader queries parts beforehand
+func prepareReaderStatements(tableName string) {
+
+	queryMap[getTrace] = fmt.Sprintf(getTraceQuery, tableName)
+	queryMap[getServices] = fmt.Sprintf(getServicesQuery, tableName)
+	queryMap[getOpsWithNoParams] = fmt.Sprintf(getOpsWithNoParamsQuery, tableName)
+	queryMap[getOpsWithParams] = fmt.Sprintf(getOpsWithParamsQuery, tableName)
+	queryMap[getDependencies] = fmt.Sprintf(getDependenciesQuery, tableName, tableName)
+	queryMap[getTraceIdBase] = fmt.Sprintf(getTraceIdBaseQuery, tableName)
+	queryMap[getTracesBase] = fmt.Sprintf(getTracesBaseQuery, tableName)
 }
 
 const defaultNumTraces = 20
@@ -45,12 +62,15 @@ var safetySwitch = unsafe.Stmt{
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kusto.NewStmt(`OTELTraces | where TraceID == ParamTraceID 	| extend Duration=totimespan(datetime_diff('microsecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`).MustDefinitions(
+	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getTrace]).MustDefinitions(
 		kusto.NewDefinitions().Must(
 			kusto.ParamTypes{
 				"ParamTraceID": kusto.ParamType{Type: types.String},
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
+
+	log.Default().Println(kustoStmt.String())
+
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
@@ -58,8 +78,11 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 	defer iter.Stop()
 
 	var spans []*model.Span
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := kustoSpan{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
@@ -81,7 +104,11 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
-	iter, err := r.client.Query(ctx, r.database, kusto.NewStmt("set query_results_cache_max_age = time(5m); OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']) | summarize by ProcessServiceName | sort by ProcessServiceName asc"))
+
+	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getServices])
+	log.Default().Println(kustoStmt.String())
+	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +119,11 @@ func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 	}
 
 	var services []string
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			service := Service{}
 			if err := row.ToStruct(&service); err != nil {
 				return err
@@ -118,23 +148,17 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 
 	var kustoStmt kusto.Stmt
 	if query.ServiceName == "" && query.SpanKind == "" {
-		kustoStmt = kusto.NewStmt(`OTELTraces
-| summarize count() by SpanName
-| sort by count_
-| project-away count_`)
+		kustoStmt = kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getOpsWithNoParams])
 	}
 
 	if query.ServiceName != "" && query.SpanKind == "" {
-		kustoStmt = kusto.NewStmt(`OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
-| where ProcessServiceName == ParamProcessServiceName
-| summarize count() by SpanName
-| sort by count_
-| project-away count_`).MustDefinitions(
-			kusto.NewDefinitions().Must(
-				kusto.ParamTypes{
-					"ParamProcessServiceName": kusto.ParamType{Type: types.String},
-				},
-			)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamProcessServiceName": query.ServiceName}))
+		kustoStmt = kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getOpsWithParams]).
+			MustDefinitions(
+				kusto.NewDefinitions().Must(
+					kusto.ParamTypes{
+						"ParamProcessServiceName": kusto.ParamType{Type: types.String},
+					},
+				)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamProcessServiceName": query.ServiceName}))
 	}
 
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
@@ -144,8 +168,11 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 	defer iter.Stop()
 
 	operations := []spanstore.Operation{}
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			operation := Operation{}
 			if err := row.ToStruct(&operation); err != nil {
 				return err
@@ -175,7 +202,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		TraceID string `kusto:"TraceID"`
 	}
 
-	kustoStmt := kusto.NewStmt("OTELTraces | extend Duration=totimespan(datetime_diff('microsecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name'])", kusto.UnsafeStmt(safetySwitch))
+	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getTraceIdBase])
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -236,8 +263,11 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	defer iter.Stop()
 
 	var traceIds []model.TraceID
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := TraceID{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
@@ -264,7 +294,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		query.NumTraces = defaultNumTraces
 	}
 
-	kustoStmt := kusto.NewStmt("let TraceIDs = (OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']),Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime))", kusto.UnsafeStmt(safetySwitch))
+	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(fmt.Sprintf(`let TraceIDs = (%s`, queryMap[getTracesBase]))
 	kustoDefinitions := make(kusto.ParamTypes)
 	kustoParameters := make(kusto.QueryValues)
 
@@ -314,7 +344,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
 	kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
 
-	kustoStmt = kustoStmt.Add("); OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']),Duration=totimespan(datetime_diff('millisecond',EndTime,StartTime))")
+	kustoStmt = kustoStmt.UnsafeAdd(fmt.Sprintf(`); %s`, queryMap[getTracesBase]))
 
 	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
 	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
@@ -339,9 +369,11 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	m := make(map[model.TraceID][]*model.Span)
 
-	err = iter.Do(
-		func(row *table.Row) error {
-
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := kustoSpan{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err
@@ -377,19 +409,14 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 		CallCount value.Long `kusto:"CallCount"`
 	}
 
-	kustoStmt := kusto.NewStmt(`OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
-| where StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
-| project ProcessServiceName, SpanID, ChildOfSpanId = ParentID | join (OTELTraces | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
-| project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId | where ProcessServiceName != ParentService
-| extend Call=pack('Parent', ParentService, 'Child', ProcessServiceName) | summarize CallCount=count() by tostring(Call) | extend Call=parse_json(Call)
-| evaluate bag_unpack(Call)
-	`).MustDefinitions(
-		kusto.NewDefinitions().Must(
-			kusto.ParamTypes{
-				"ParamEndTs":    kusto.ParamType{Type: types.DateTime},
-				"ParamLookBack": kusto.ParamType{Type: types.Timespan},
-			},
-		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
+	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getDependencies]).
+		MustDefinitions(
+			kusto.NewDefinitions().Must(
+				kusto.ParamTypes{
+					"ParamEndTs":    kusto.ParamType{Type: types.DateTime},
+					"ParamLookBack": kusto.ParamType{Type: types.Timespan},
+				},
+			)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
@@ -397,8 +424,11 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 	defer iter.Stop()
 
 	var dependencyLinks []model.DependencyLink
-	err = iter.Do(
-		func(row *table.Row) error {
+	err = iter.DoOnRowOrError(
+		func(row *table.Row, e *errors.Error) error {
+			if e != nil {
+				return e
+			}
 			rec := kustoDependencyLink{}
 			if err := row.ToStruct(&rec); err != nil {
 				return err

@@ -2,8 +2,9 @@ package main
 
 import (
 	"flag"
-	"github.com/dodopizza/jaeger-kusto/runner"
 	"os"
+
+	"github.com/dodopizza/jaeger-kusto/runner"
 
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/dodopizza/jaeger-kusto/store"

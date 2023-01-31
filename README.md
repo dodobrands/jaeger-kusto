@@ -42,7 +42,8 @@ Then, you should create json config file:
   "clientSecret": "",
   "database": "<database>",
   "endpoint": "https://<cluster>.<region>.kusto.windows.net",
-  "tenantId": ""
+  "tenantId": "",
+  "traceTableName":"<trace_table>" // defaults to `OTELTraces` if not provided
 }
 ```
 
