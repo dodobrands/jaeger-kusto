@@ -30,7 +30,8 @@ var (
 
 	getServices      = `getServices`
 	getServicesQuery = `set query_results_cache_max_age = time(5m); %s 
-	| extend ProcessServiceName=tostring(ResourceAttributes.['service.name']) 
+	| extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
+	| where ProcessServiceName!="" 
 	| summarize by ProcessServiceName 
 	| sort by ProcessServiceName asc`
 

@@ -106,10 +106,14 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 		Tags:        nil,
 		Tag:         nil,
 	}
-	err = json.Unmarshal(kustoSpan.ProcessTags.Value, &process.Tag)
+
+	replacer := strings.NewReplacer("[", "", "]", "", ".", "", "\\", "")
+	processTag := []byte(replacer.Replace(string(kustoSpan.ProcessTags.Value)))
+	err = json.Unmarshal(processTag, &process.Tag)
 	if err != nil {
 		return nil, err
 	}
+
 	jsonSpan := &dbmodel.Span{
 		TraceID:         dbmodel.TraceID(kustoSpan.TraceID),
 		SpanID:          dbmodel.SpanID(kustoSpan.SpanID),
