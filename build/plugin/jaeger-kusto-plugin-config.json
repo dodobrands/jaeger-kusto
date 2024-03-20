@@ -1,8 +1,0 @@
-{
-    "diagnosticsProfilingEnabled": true,
-    "kustoConfigPath": "/config/jaeger-kusto-config.json",
-    "logLevel": "info",
-    "logJson": true,
-    "tracingSamplerPercentage": 0.0,
-    "tracingRPCMetrics": false
-}

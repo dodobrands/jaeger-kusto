@@ -17,7 +17,7 @@ services:
       - "../../jaeger-kusto-config.json:/config/jaeger-kusto-config.json"
       - "./jaeger-kusto-plugin-config.json:/config/jaeger-kusto-plugin-config.json"
   jaeger:
-    image: jaegertracing/all-in-one:1.31.0
+    image: jaegertracing/all-in-one:1.55
     ports:
       - "5775:5775/udp"
       - "6831:6831/udp"

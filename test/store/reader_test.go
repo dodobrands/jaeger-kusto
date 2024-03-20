@@ -15,6 +15,7 @@ import (
 
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/dodopizza/jaeger-kusto/store"
+	"github.com/lxc/lxd/shared/logger"
 
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
@@ -23,7 +24,7 @@ import (
 func TestKustoSpanReader_GetTrace(tester *testing.T) {
 
 	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
-	expectedOutput := fmt.Sprintf(`%s | where TraceID == ParamTraceID | extend Duration=totimespan(datetime_diff('microsecond',EndTime,StartTime)) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`, kustoConfig.TraceTableName)
+	expectedOutput := fmt.Sprintf(`%s | where TraceID == ParamTraceID | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`, kustoConfig.TraceTableName)
 	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 	trace, _ := model.TraceIDFromString("3f6d8f4c5008352055c14804949d1e57")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -27,7 +27,7 @@ type kustoSpanReader struct {
 }
 
 type kustoReaderClient interface {
-	Query(ctx context.Context, db string, query kusto.Stmt, options ...kusto.QueryOption) (*kusto.RowIterator, error)
+	Query(ctx context.Context, db string, query kusto.Statement, options ...kusto.QueryOption) (*kusto.RowIterator, error)
 }
 
 var queryMap = map[string]string{}
@@ -43,7 +43,6 @@ func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger) (*kustoSpanR
 
 // Prepares reader queries parts beforehand
 func prepareReaderStatements(tableName string) {
-
 	queryMap[getTrace] = fmt.Sprintf(getTraceQuery, tableName)
 	queryMap[getServices] = fmt.Sprintf(getServicesQuery, tableName)
 	queryMap[getOpsWithNoParams] = fmt.Sprintf(getOpsWithNoParamsQuery, tableName)
@@ -70,7 +69,6 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
 
 	log.Default().Println(kustoStmt.String())
-
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 	if err != nil {
 		return nil, err
@@ -90,6 +88,7 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 			var span *model.Span
 			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
 			if err != nil {
+				r.logger.Error(fmt.Sprintf("Error in transformKustoSpanToModelSpan. TraceId: %s SPanId: %s", rec.TraceID, rec.SpanID), err)
 				return err
 			}
 			spans = append(spans, span)
@@ -381,8 +380,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 			var span *model.Span
 			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
-			r.logger.Debug("Span ==> " + span.String())
-
+			
 			if err != nil {
 				return err
 			}
@@ -395,7 +393,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	for _, spanArray := range m {
 		trace := model.Trace{Spans: spanArray}
-		r.logger.Debug("Trace ==> " + trace.String())
+		//r.logger.Debug("Trace ==> " + trace.String())
 		traces = append(traces, &trace)
 	}
 	return traces, err

@@ -1,0 +1,57 @@
+{
+  "TraceID": "a12f0254b5c4c859e0b9a3e8d2a33b0f",
+  "SpanID": "b368ae98383ae6b5",
+  "ParentID": "",
+  "SpanName": "HTTP POST",
+  "SpanStatus": "STATUS_CODE_UNSET",
+  "SpanKind": "SPAN_KIND_SERVER",
+  "StartTime": "2024-03-13T07:33:01.3090000Z",
+  "EndTime": "2024-03-13T07:33:01.3228955Z",
+  "ProcessTags": {
+    "process.executable.name": "node",
+    "process.executable.path": "/usr/local/bin/node",
+    "process.pid": 17,
+    "service.name": "frontend",
+    "telemetry.sdk.name": "opentelemetry",
+    "telemetry.sdk.version": "1.18.1",
+    "telemetry.sdk.language": "nodejs",
+    "process.command_args": [
+      "/usr/local/bin/node",
+      "--require",
+      "./Instrumentation.js",
+      "/app/server.js"
+    ],
+    "process.owner": "nextjs",
+    "process.runtime.version": "18.19.1",
+    "service.namespace": "opentelemetry-demo",
+    "host.name": "334bf69ae415",
+    "os.type": "linux",
+    "process.runtime.description": "Node.js",
+    "process.runtime.name": "nodejs",
+    "host.arch": "amd64",
+    "process.command": "/app/server.js",
+    "os.version": "6.6.16-linuxkit"
+  },
+  "Tags": {
+    "scope.name": "frontend",
+    "http.status_code": 200,
+    "http.url": "frontend-proxy:8080/api/cart",
+    "http.method": "POST",
+    "http.target": "/api/cart",
+    "http.user_agent": "python-requests/2.31.0",
+    "http.flavor": "1.1",
+    "app.synthetic_request": true
+  },
+  "Logs": [],
+  "Links": [
+    {
+      "TraceID": "141674c2f50505faafc21802eb9d7798",
+      "SpanID": "2eef99ced189a60b",
+      "TraceState": "",
+      "SpanLinkAttributes": {}
+    }
+  ],
+  "Duration": "00:00:00.0013895",
+  "ProcessServiceName": "frontend",
+  "References": []
+}
