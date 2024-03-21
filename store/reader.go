@@ -105,7 +105,7 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 
 	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getServices])
-	log.Default().Println(kustoStmt.String())
+	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
 	iter, err := r.client.Query(ctx, r.database, kustoStmt)
 
 	if err != nil {
@@ -380,7 +380,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 			var span *model.Span
 			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
-			
+
 			if err != nil {
 				return err
 			}

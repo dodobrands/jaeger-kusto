@@ -1,7 +1,5 @@
 # Azure Data Explorer (Kusto) gRPC backend for Jaeger
 
-![master](https://github.com/dodopizza/jaeger-kusto/workflows/master/badge.svg)
-![Docker Pulls](https://img.shields.io/docker/pulls/dodopizza/jaeger-kusto-collector)
 
 This is a storage grpc-plugin for [Jaeger end-to-end distributed tracing system](https://www.jaegertracing.io/) and was originally forked from https://github.com/dodopizza/jaeger-kusto and extended now to support OTEL exporter used with ADX.
 
@@ -40,3 +38,13 @@ Plugin can be started as a standalone app (GRPC server):
 * Standalone app (as grpc server). For this mode, use `docker compose --file build/server/docker-compose.yml up --build`
 Once this is done, you can run the Jaeger UI on <http://localhost:16686> and see the traces in the UI.
 
+## Known Limitations
+
+The plugin is in early development stage (alpha) has the following known limitations:
+
+* Currently search by tags is not implemented
+* There are deprecated API's in use. These will be fixed in a newer version of the plugin.
+
+## Reporting issues
+
+The logging is controlled in the `jaeger-kusto-plugin-config.json` in the build/server folder. Please change the logLevel to `debug` to get more detailed logs. This should show the executed query, please execute this query in Kusto and provide the payload as well to debug issues in the applied transformation. Attach both the logs and the payload to troubleshoot the issue.

@@ -32,11 +32,11 @@ services:
       - "--grpc-storage.server=plugin:8989"
       - "--grpc-storage.connection-timeout=60s"
       - "--grpc-storage.tls.enabled=false"
-  hotrod:
-    image: jaegertracing/example-hotrod:latest
-    ports:
-      - "8080-8083:8080-8083"
-    restart: "no"
-    environment:
-      "JAEGER_AGENT_HOST": "jaeger"
-      "JAEGER_AGENT_PORT": "6831"
+  # hotrod:
+  #   image: jaegertracing/example-hotrod:latest
+  #   ports:
+  #     - "8080-8083:8080-8083"
+  #   restart: "no"
+  #   environment:
+  #     "JAEGER_AGENT_HOST": "jaeger"
+  #     "JAEGER_AGENT_PORT": "6831"
