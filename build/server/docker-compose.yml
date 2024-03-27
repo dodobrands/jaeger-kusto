@@ -40,3 +40,9 @@ services:
     environment:
       "JAEGER_AGENT_HOST": "jaeger"
       "JAEGER_AGENT_PORT": "6831"
+  kustainer:
+    image: mcr.microsoft.com/azuredataexplorer/kustainer-linux:latest
+    ports:
+      - "9090:8080"
+    environment:
+      "ACCEPT_EULA": "Y"
