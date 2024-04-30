@@ -28,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	kustoConfig, err := config.ParseKustoConfig(pluginConfig.KustoConfigPath)
+	kustoConfig, err := config.ParseKustoConfig(pluginConfig.KustoConfigPath, pluginConfig.ReadNoTruncation, pluginConfig.ReadNoTimeout)
 	if err != nil {
 		logger.Error("error occurred while reading kusto configuration", "error", err)
 		os.Exit(1)

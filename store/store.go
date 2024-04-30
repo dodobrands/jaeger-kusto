@@ -1,6 +1,8 @@
 package store
 
 import (
+	"errors"
+
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/hashicorp/go-hclog"
@@ -17,8 +19,27 @@ type store struct {
 
 // NewStore creates new Kusto store for Jaeger span storage
 func NewStore(pc *config.PluginConfig, kc *config.KustoConfig, logger hclog.Logger) (shared.StoragePlugin, error) {
-
-	kcsb := kusto.NewConnectionStringBuilder(kc.Endpoint).WithAadAppKey(kc.ClientID, kc.ClientSecret, kc.TenantID)
+	var kcsb *kusto.ConnectionStringBuilder
+	if kc.UseManagedIdentity {
+		if kc.ClientID == "" {
+			logger.Info("Using system managed identity")
+			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithSystemManagedIdentity()
+		} else {
+			logger.Info("Using user managed identity")
+			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithUserManagedIdentity(kc.ClientID)
+		}
+	} else {
+		if kc.UseWorkloadIdentity {
+			logger.Info("Using workload identity for authentication")
+			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithDefaultAzureCredential()
+		} else {
+			if kc.ClientID == "" || kc.ClientSecret == "" || kc.TenantID == "" {
+				return nil, errors.New("missing client configuration (ClientId, ClientSecret, TenantId) for kusto")
+			}
+			logger.Info("Authenticating using AppId [%s] / Secret / TenantId [%s]", kc.ClientID, kc.TenantID)
+			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithAadAppKey(kc.ClientID, kc.ClientSecret, kc.TenantID)
+		}
+	}
 	client, err := kusto.New(kcsb)
 	if err != nil {
 		return nil, err
@@ -27,7 +48,7 @@ func NewStore(pc *config.PluginConfig, kc *config.KustoConfig, logger hclog.Logg
 	// create factory for trace table opertations
 	factory := newKustoFactory(client, pc, kc.Database, kc.TraceTableName)
 
-	reader, err := newKustoSpanReader(factory, logger)
+	reader, err := newKustoSpanReader(factory, logger, kc.ClientRequestOptions)
 	if err != nil {
 		return nil, err
 	}

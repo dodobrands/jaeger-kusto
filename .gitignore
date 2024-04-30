@@ -20,3 +20,5 @@ jaeger-kusto
 .idea/
 
 jaeger-kusto-config.json
+kompose
+build/server/helm/values.yaml

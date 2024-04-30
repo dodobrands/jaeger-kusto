@@ -1,0 +1,24 @@
+apiVersion: v1
+data:
+  jaeger-kusto-config.json: |-
+    {
+        "clientId": {{ .Values.authConfig.clientId | quote}},
+        {{- if .Values.authConfig.clientSecret }}
+        "clientSecret": {{ .Values.authConfig.clientSecret | quote}},
+        {{- end }}
+        {{- if .Values.authConfig.traceTableName }}
+        "traceTableName": {{ .Values.authConfig.traceTableName | quote}},
+        {{- end }}
+        "useWorkloadIdentity": {{default false .Values.authConfig.useWorkloadIdentity }},
+        "useManagedIdentity": {{default false .Values.authConfig.useManagedIdentity}},
+        "database": {{ .Values.authConfig.database  | quote}},
+        "endpoint": {{ .Values.authConfig.clusterUrl | quote}},
+        "tenantId": {{ .Values.authConfig.tenantId | quote}}
+    }
+kind: ConfigMap
+metadata:
+  annotations:
+    use-subpath: "true"
+  labels:
+    io.kompose.service: kusto-jaeger-plugin
+  name: plugin-auth-config

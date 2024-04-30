@@ -3,11 +3,11 @@ package store
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
+	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/Azure/azure-kusto-go/kusto/unsafe"
@@ -21,9 +21,10 @@ import (
 )
 
 type kustoSpanReader struct {
-	client   kustoReaderClient
-	database string
-	logger   hclog.Logger
+	client             kustoReaderClient
+	database           string
+	logger             hclog.Logger
+	defaultReadOptions []kusto.QueryOption
 }
 
 type kustoReaderClient interface {
@@ -32,12 +33,13 @@ type kustoReaderClient interface {
 
 var queryMap = map[string]string{}
 
-func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger) (*kustoSpanReader, error) {
+func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger, defaultReadOptions []kusto.QueryOption) (*kustoSpanReader, error) {
 	prepareReaderStatements(factory.Table)
 	return &kustoSpanReader{
 		factory.Reader(),
 		factory.Database,
 		logger,
+		defaultReadOptions,
 	}, nil
 }
 
@@ -59,6 +61,11 @@ var safetySwitch = unsafe.Stmt{
 	SuppressWarning: true,
 }
 
+func GetClientId() string {
+	// get a UUID and concatenante with the service name
+	return fmt.Sprintf("azure-kusto-jaeger-%s", uuid.New().String())
+}
+
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
 	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getTrace]).MustDefinitions(
@@ -68,9 +75,11 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 			},
 		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
 
-	log.Default().Println(kustoStmt.String())
-	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+	clientRequestId := GetClientId()
+	// Append a client request id as well to the request
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 	if err != nil {
+		r.logger.Error("Failed running GetTrace query. TraceID: %s. ClientRequestId : %s", traceID.String(), clientRequestId)
 		return nil, err
 	}
 	defer iter.Stop()
@@ -88,27 +97,26 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 			var span *model.Span
 			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
 			if err != nil {
-				r.logger.Error(fmt.Sprintf("Error in transformKustoSpanToModelSpan. TraceId: %s SPanId: %s", rec.TraceID, rec.SpanID), err)
+				r.logger.Error(fmt.Sprintf("Error in transformKustoSpanToModelSpan. TraceId: %s SpanId: %s", rec.TraceID, rec.SpanID), err)
 				return err
 			}
 			spans = append(spans, span)
 			return nil
 		},
 	)
-
 	trace := model.Trace{Spans: spans}
-
 	return &trace, err
 }
 
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
-
+	clientRequestId := GetClientId()
 	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getServices])
 	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
-	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 
 	if err != nil {
+		r.logger.Error("Failed running GetServices query. ClientRequestId : %s", clientRequestId)
 		return nil, err
 	}
 	defer iter.Stop()
@@ -144,7 +152,7 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 		OperationName string `kusto:"OperationName"`
 		SpanKind      string `kusto:"SpanKind"`
 	}
-
+	clientRequestId := GetClientId()
 	var kustoStmt kusto.Stmt
 	if query.ServiceName == "" && query.SpanKind == "" {
 		kustoStmt = kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getOpsWithNoParams])
@@ -160,8 +168,9 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 				)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamProcessServiceName": query.ServiceName}))
 	}
 
-	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 	if err != nil {
+		r.logger.Error("Failed running GetOperations query. ClientRequestId : %s", clientRequestId)
 		return nil, err
 	}
 	defer iter.Stop()
@@ -254,8 +263,8 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	}
 
 	kustoStmt = kustoStmt.MustDefinitions(kusto.NewDefinitions().Must(kustoDefinitions)).MustParameters(kusto.NewParameters().Must(kustoParameters))
-
-	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+	clientRequestId := GetClientId()
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 	if err != nil {
 		return nil, err
 	}
@@ -359,8 +368,8 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	r.logger.Debug(kustoStmt.String())
 	r.logger.Debug(kustoStmt.ValuesJSON())
-
-	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+	clientRequestId := GetClientId()
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +424,8 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 					"ParamLookBack": kusto.ParamType{Type: types.Timespan},
 				},
 			)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
-	iter, err := r.client.Query(ctx, r.database, kustoStmt)
+	clientRequestId := GetClientId()
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 	if err != nil {
 		return nil, err
 	}

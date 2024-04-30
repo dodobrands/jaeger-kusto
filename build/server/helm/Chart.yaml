@@ -1,0 +1,8 @@
+name: kusto-jaeger-plugin
+description: A generated Helm Chart for kusto-jaeger-plugin
+version: 0.0.1
+apiVersion: v2
+keywords:
+  - kusto-jaeger-plugin
+sources:
+home:

@@ -1,0 +1,16 @@
+image:
+  repository: agramachandran/jaeger-kusto
+  tag: 1.1.0-Preview
+  pullPolicy: IfNotPresent
+baseConfig:
+  logLevel: info
+  logJson: true
+  remoteMode: true
+  readNoTruncation: true
+authConfig:
+  clientId: 
+  useManagedIdentity: true
+  database: 
+  clusterUrl: https://<cluster>.<region>.kusto.windows.net
+  tenantId: 
+  traceTableName: OTELTraces
