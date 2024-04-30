@@ -176,11 +176,16 @@ func transformReferencesToLinks(kustoSpan *kustoSpan, logger hclog.Logger) ([]db
 
 	var followsFromRefs []dbmodel.Reference
 	for _, ref := range kustoSpan.Links {
-		followsFromRefs = append(followsFromRefs, dbmodel.Reference{
-			RefType: dbmodel.FollowsFrom,
-			TraceID: ref.TraceID,
-			SpanID:  ref.SpanID,
-		})
+		if ref.TraceID == "" || ref.SpanID == "" { // Skip the empty references
+			logger.Warn(fmt.Sprintf("Empty link TraceID or SpanID for RefType %s . TraceId: %s SpanId: %s",
+				ref.RefType, kustoSpan.TraceID, kustoSpan.SpanID))
+		} else {
+			followsFromRefs = append(followsFromRefs, dbmodel.Reference{
+				RefType: dbmodel.FollowsFrom,
+				TraceID: ref.TraceID,
+				SpanID:  ref.SpanID,
+			})
+		}
 	}
 	// Combine the childOfRefs and followsFromRefs
 	spanRefs := append(childOfRefs, followsFromRefs...)
