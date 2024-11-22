@@ -203,9 +203,6 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 
 	if query.Tags != nil {
 		for k, v := range query.Tags {
-			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
-			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
-
 			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
 			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", replacedTag, v, replacedTag, v)
 			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
