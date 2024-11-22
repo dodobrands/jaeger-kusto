@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
@@ -205,6 +206,9 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
 			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
 
+			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
+			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", replacedTag, v, replacedTag, v)
+			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
 		}
 	}
 
@@ -286,7 +290,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	if query.Tags != nil {
 		for k, v := range query.Tags {
 			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
-			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
+			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
 		}
 	}
 
