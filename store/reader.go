@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"go/types"
 	"strings"
 	"time"
 
@@ -51,9 +52,13 @@ func GetClientId() string {
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kql.New("").AddTable(r.tableName).AddLiteral(getTraceQuery)
-	kustoStmtParams := kql.NewParameters().AddString("ParamTraceID", traceID.String())
-
+	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getTrace]).MustDefinitions(
+		kusto.NewDefinitions().Must(
+			kusto.ParamTypes{
+				"ParamTraceID": kusto.ParamType{Type: types.String},
+			},
+		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
+	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
 	clientRequestId := GetClientId()
 	// Append a client request id as well to the request
 	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoStmtParams))...)

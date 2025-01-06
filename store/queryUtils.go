@@ -29,11 +29,8 @@ const (
 
 	getTraceQuery = ` | where TraceID == ParamTraceID | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`
 
-	getServicesQuery = `
-	| extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
-	| where ProcessServiceName!="" 
-	| summarize by ProcessServiceName 
-	| sort by ProcessServiceName asc`
+	getServices      = `getServices`
+	getServicesQuery = `set query_results_cache_max_age = time(5m); %s | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']) | where ProcessServiceName!="" | summarize by ProcessServiceName | sort by ProcessServiceName asc`
 
 	getOpsWithNoParams      = `getOpsWithNoParams`
 	getOpsWithNoParamsQuery = `
