@@ -24,40 +24,38 @@ var (
 	ErrStartAndEndTimeNotSet = errors.New("start and End Time must be set")
 )
 
-var (
-	getTrace      = `getTrace`
-	getTraceQuery = `%s | where TraceID == ParamTraceID | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`
+const (
+	queryResultsCacheAge = `set query_results_cache_max_age = time(5m);`
 
-	getServices      = `getServices`
-	getServicesQuery = `set query_results_cache_max_age = time(5m); %s 
+	getTraceQuery = ` | where TraceID == ParamTraceID | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`
+
+	getServicesQuery = `
 	| extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
 	| where ProcessServiceName!="" 
 	| summarize by ProcessServiceName 
 	| sort by ProcessServiceName asc`
 
 	getOpsWithNoParams      = `getOpsWithNoParams`
-	getOpsWithNoParamsQuery = `set query_results_cache_max_age = time(5m);%s
+	getOpsWithNoParamsQuery = `
 	| summarize count() by SpanName , SpanKind
 	| sort by count_
 	| project OperationName=SpanName,SpanKind`
 
-	getOpsWithParams      = `getOpsWithParams`
-	getOpsWithParamsQuery = `set query_results_cache_max_age = time(5m); %s | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
+	getOpsWithParamsQuery = ` | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
 	| where ProcessServiceName == ParamProcessServiceName
 	| summarize count() by SpanName , SpanKind
 	| sort by count_
 	| project OperationName=SpanName,SpanKind`
 
-	getDependencies      = `getDependencies`
-	getDependenciesQuery = `set query_results_cache_max_age = time(5m);%s | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
+	getDependenciesQuery = ` | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
 	| where StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
-	| project ProcessServiceName, SpanID, ChildOfSpanId = ParentID | join (%s | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
+	| project ProcessServiceName, SpanID, ChildOfSpanId = ParentID | join (`
+	getDependenciesJoinQuery = ` | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
 	| project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId | where ProcessServiceName != ParentService
 	| extend Call=pack('Parent', ParentService, 'Child', ProcessServiceName) | summarize CallCount=count() by tostring(Call) | extend Call=parse_json(Call)
 	| evaluate bag_unpack(Call)`
 
-	getTraceIdBase      = `getTraceIdBase`
-	getTraceIdBaseQuery = `%s | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name'])`
+	getTraceIdBaseQuery = ` | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name'])`
 
 	getTracesBase      = `getTracesBase`
 	getTracesBaseQuery = `%s | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']),Duration=datetime_diff('microsecond',EndTime,StartTime)`

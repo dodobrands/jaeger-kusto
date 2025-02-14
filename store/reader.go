@@ -3,19 +3,16 @@ package store
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Azure/azure-kusto-go/kusto/data/value"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/Azure/azure-kusto-go/kusto/unsafe"
-
 	"github.com/Azure/azure-kusto-go/kusto"
 	"github.com/Azure/azure-kusto-go/kusto/data/errors"
 	"github.com/Azure/azure-kusto-go/kusto/data/table"
-	"github.com/Azure/azure-kusto-go/kusto/data/types"
+	"github.com/Azure/azure-kusto-go/kusto/kql"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 )
@@ -23,6 +20,7 @@ import (
 type kustoSpanReader struct {
 	client             kustoReaderClient
 	database           string
+	tableName          string
 	logger             hclog.Logger
 	defaultReadOptions []kusto.QueryOption
 }
@@ -34,32 +32,16 @@ type kustoReaderClient interface {
 var queryMap = map[string]string{}
 
 func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger, defaultReadOptions []kusto.QueryOption) (*kustoSpanReader, error) {
-	prepareReaderStatements(factory.Table)
 	return &kustoSpanReader{
 		factory.Reader(),
 		factory.Database,
+		factory.Table,
 		logger,
 		defaultReadOptions,
 	}, nil
 }
 
-// Prepares reader queries parts beforehand
-func prepareReaderStatements(tableName string) {
-	queryMap[getTrace] = fmt.Sprintf(getTraceQuery, tableName)
-	queryMap[getServices] = fmt.Sprintf(getServicesQuery, tableName)
-	queryMap[getOpsWithNoParams] = fmt.Sprintf(getOpsWithNoParamsQuery, tableName)
-	queryMap[getOpsWithParams] = fmt.Sprintf(getOpsWithParamsQuery, tableName)
-	queryMap[getDependencies] = fmt.Sprintf(getDependenciesQuery, tableName, tableName)
-	queryMap[getTraceIdBase] = fmt.Sprintf(getTraceIdBaseQuery, tableName)
-	queryMap[getTracesBase] = fmt.Sprintf(getTracesBaseQuery, tableName)
-}
-
 const defaultNumTraces = 20
-
-var safetySwitch = unsafe.Stmt{
-	Add:             true,
-	SuppressWarning: true,
-}
 
 func GetClientId() string {
 	// get a UUID and concatenante with the service name
@@ -68,16 +50,12 @@ func GetClientId() string {
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getTrace]).MustDefinitions(
-		kusto.NewDefinitions().Must(
-			kusto.ParamTypes{
-				"ParamTraceID": kusto.ParamType{Type: types.String},
-			},
-		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
+	kustoStmt := kql.New("").AddTable(r.tableName).AddLiteral(getTraceQuery)
+	kustoStmtParams := kql.NewParameters().AddString("ParamTraceID", traceID.String())
 
 	clientRequestId := GetClientId()
 	// Append a client request id as well to the request
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoStmtParams))...)
 	if err != nil {
 		r.logger.Error("Failed running GetTrace query. TraceID: %s. ClientRequestId : %s", traceID.String(), clientRequestId)
 		return nil, err
@@ -111,7 +89,7 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 	clientRequestId := GetClientId()
-	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getServices])
+	kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getServicesQuery)
 	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
 	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 
@@ -153,22 +131,20 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 		SpanKind      string `kusto:"SpanKind"`
 	}
 	clientRequestId := GetClientId()
-	var kustoStmt kusto.Stmt
+	var iter *kusto.RowIterator
+	var err error
 	if query.ServiceName == "" && query.SpanKind == "" {
-		kustoStmt = kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getOpsWithNoParams])
+		kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getOpsWithNoParamsQuery)
+		iter, err = r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 	}
 
 	if query.ServiceName != "" && query.SpanKind == "" {
-		kustoStmt = kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getOpsWithParams]).
-			MustDefinitions(
-				kusto.NewDefinitions().Must(
-					kusto.ParamTypes{
-						"ParamProcessServiceName": kusto.ParamType{Type: types.String},
-					},
-				)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamProcessServiceName": query.ServiceName}))
+		kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getOpsWithParamsQuery)
+		kustoStmtParams := kql.NewParameters().AddString("ParamProcessServiceName", query.ServiceName)
+
+		iter, err = r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoStmtParams))...)
 	}
 
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
 	if err != nil {
 		r.logger.Error("Failed running GetOperations query. ClientRequestId : %s", clientRequestId)
 		return nil, err
@@ -210,61 +186,53 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		TraceID string `kusto:"TraceID"`
 	}
 
-	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getTraceIdBase])
-	kustoDefinitions := make(kusto.ParamTypes)
-	kustoParameters := make(kusto.QueryValues)
+	kustoStmt := kql.New("").AddTable(r.tableName).AddLiteral(getTraceIdBaseQuery)
+	kustoParameters := kql.NewParameters()
 
 	if query.ServiceName != "" {
-		kustoStmt = kustoStmt.Add(` | where ProcessServiceName == ParamProcessServiceName`)
-		kustoDefinitions["ParamProcessServiceName"] = kusto.ParamType{Type: types.String}
-		kustoParameters["ParamProcessServiceName"] = query.ServiceName
+		kustoStmt = kustoStmt.AddLiteral(` | where ProcessServiceName == ParamProcessServiceName`)
+		kustoParameters = kustoParameters.AddString("ParamProcessServiceName", query.ServiceName)
+
 	}
 
 	if query.OperationName != "" {
-		kustoStmt = kustoStmt.Add(` | where SpanName == ParamOperationName`)
-		kustoDefinitions["ParamOperationName"] = kusto.ParamType{Type: types.String}
-		kustoParameters["ParamOperationName"] = query.OperationName
+		kustoStmt = kustoStmt.AddLiteral(` | where SpanName == ParamOperationName`)
+		kustoParameters = kustoParameters.AddString("ParamOperationName", query.OperationName)
 	}
 
 	if query.Tags != nil {
 		for k, v := range query.Tags {
-			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
-			tagFilter := fmt.Sprintf(" | where TraceAttributes.%s == '%s' or ResourceAttributes.%s == '%s'", replacedTag, v, replacedTag, v)
-			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
+			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
+			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
+
 		}
 	}
 
-	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
-	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
-	kustoParameters["ParamStartTimeMin"] = query.StartTimeMin
+	kustoStmt = kustoStmt.AddLiteral(` | where StartTime > ParamStartTimeMin`)
+	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMin", query.StartTimeMin)
 
-	kustoStmt = kustoStmt.Add(` | where StartTime < ParamStartTimeMax`)
-	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
-	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
+	kustoStmt = kustoStmt.AddLiteral(` | where StartTime < ParamStartTimeMax`)
+	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMax", query.StartTimeMax)
 
 	if query.DurationMin != 0 {
-		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMin`)
-		kustoDefinitions["ParamDurationMin"] = kusto.ParamType{Type: types.Timespan}
-		kustoParameters["ParamDurationMin"] = query.DurationMin
+		kustoStmt = kustoStmt.AddLiteral(` | where Duration > ParamDurationMin`)
+		kustoParameters = kustoParameters.AddTimespan("ParamDurationMin", query.DurationMin)
 	}
 
 	if query.DurationMax != 0 {
-		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMax`)
-		kustoDefinitions["ParamDurationMax"] = kusto.ParamType{Type: types.Timespan}
-		kustoParameters["ParamDurationMax"] = query.DurationMax
+		kustoStmt = kustoStmt.AddLiteral(` | where Duration > ParamDurationMax`)
+		kustoParameters = kustoParameters.AddTimespan("ParamDurationMax", query.DurationMax)
 	}
 
-	kustoStmt = kustoStmt.Add("| summarize by TraceID")
+	kustoStmt = kustoStmt.AddLiteral("| summarize by TraceID")
 
 	if query.NumTraces != 0 {
-		kustoStmt.Add(`| sample ParamNumTraces`)
-		kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
-		kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
+		kustoStmt.AddLiteral(`| sample ParamNumTraces`)
+		kustoParameters = kustoParameters.AddInt("ParamNumTraces", int32(query.NumTraces))
 	}
 
-	kustoStmt = kustoStmt.MustDefinitions(kusto.NewDefinitions().Must(kustoDefinitions)).MustParameters(kusto.NewParameters().Must(kustoParameters))
 	clientRequestId := GetClientId()
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoParameters))...)
 	if err != nil {
 		return nil, err
 	}
@@ -302,74 +270,60 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		query.NumTraces = defaultNumTraces
 	}
 
-	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(fmt.Sprintf(`let TraceIDs = (%s`, queryMap[getTracesBase]))
-	kustoDefinitions := make(kusto.ParamTypes)
-	kustoParameters := make(kusto.QueryValues)
+	kustoStmt := kql.New("").AddUnsafe(fmt.Sprintf(`let TraceIDs = (%s`, queryMap[getTracesBase]))
+	kustoParameters := kql.NewParameters()
 
 	if query.ServiceName != "" {
-		kustoStmt = kustoStmt.Add(` | where ProcessServiceName == ParamProcessServiceName`)
-		kustoDefinitions["ParamProcessServiceName"] = kusto.ParamType{Type: types.String}
-		kustoParameters["ParamProcessServiceName"] = query.ServiceName
+		kustoStmt = kustoStmt.AddLiteral(` | where ProcessServiceName == ParamProcessServiceName`)
+		kustoParameters = kustoParameters.AddString("ParamProcessServiceName", query.ServiceName)
 	}
 
 	if query.OperationName != "" {
-		kustoStmt = kustoStmt.Add(` | where SpanName == ParamOperationName`)
-		kustoDefinitions["ParamOperationName"] = kusto.ParamType{Type: types.String}
-		kustoParameters["ParamOperationName"] = query.OperationName
+		kustoStmt = kustoStmt.AddLiteral(` | where SpanName == ParamOperationName`)
+		kustoParameters = kustoParameters.AddString("ParamOperationName", query.OperationName)
 	}
 
 	if query.Tags != nil {
 		for k, v := range query.Tags {
-			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
-			tagFilter := fmt.Sprintf(" | where TraceAttributes.%s == '%s' or ResourceAttributes.%s == '%s'", replacedTag, v, replacedTag, v)
-			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
+			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
+			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
 		}
 	}
 
-	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
-	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
-	kustoParameters["ParamStartTimeMin"] = query.StartTimeMin
+	kustoStmt = kustoStmt.AddLiteral(` | where StartTime > ParamStartTimeMin`)
+	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMin", query.StartTimeMin)
 
-	kustoStmt = kustoStmt.Add(` | where StartTime < ParamStartTimeMax`)
-	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
-	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
+	kustoStmt = kustoStmt.AddLiteral(` | where StartTime < ParamStartTimeMax`)
+	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMax", query.StartTimeMax)
 
 	if query.DurationMin != 0 {
-		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMin`)
-		kustoDefinitions["ParamDurationMin"] = kusto.ParamType{Type: types.Timespan}
-		kustoParameters["ParamDurationMin"] = query.DurationMin
+		kustoStmt = kustoStmt.AddLiteral(` | where Duration > ParamDurationMin`)
+		kustoParameters = kustoParameters.AddTimespan("ParamDurationMin", query.DurationMin)
 	}
 
 	if query.DurationMax != 0 {
-		kustoStmt = kustoStmt.Add(` | where Duration > ParamDurationMax`)
-		kustoDefinitions["ParamDurationMax"] = kusto.ParamType{Type: types.Timespan}
-		kustoParameters["ParamDurationMax"] = query.DurationMax
+		kustoStmt = kustoStmt.AddLiteral(` | where Duration > ParamDurationMax`)
+		kustoParameters = kustoParameters.AddTimespan("ParamDurationMax", query.DurationMax)
 	}
 
-	kustoStmt = kustoStmt.Add(" | summarize by TraceID")
+	kustoStmt = kustoStmt.AddLiteral(" | summarize by TraceID")
 
-	kustoStmt = kustoStmt.Add(` | sample ParamNumTraces`)
-	kustoDefinitions["ParamNumTraces"] = kusto.ParamType{Type: types.Int}
-	kustoParameters["ParamNumTraces"] = int32(query.NumTraces)
+	kustoStmt = kustoStmt.AddLiteral(` | sample ParamNumTraces`)
+	kustoParameters = kustoParameters.AddInt("ParamNumTraces", int32(query.NumTraces))
 
-	kustoStmt = kustoStmt.UnsafeAdd(fmt.Sprintf(`); %s`, queryMap[getTracesBase]))
+	kustoStmt = kustoStmt.AddUnsafe(fmt.Sprintf(`); %s`, queryMap[getTracesBase]))
 
-	kustoStmt = kustoStmt.Add(` | where StartTime > ParamStartTimeMin`)
-	kustoDefinitions["ParamStartTimeMin"] = kusto.ParamType{Type: types.DateTime}
-	kustoParameters["ParamStartTimeMin"] = query.StartTimeMin
+	kustoStmt = kustoStmt.AddLiteral(` | where StartTime > ParamStartTimeMin`)
+	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMin", query.StartTimeMin)
 
-	kustoStmt = kustoStmt.Add(` | where StartTime < ParamStartTimeMax`)
-	kustoDefinitions["ParamStartTimeMax"] = kusto.ParamType{Type: types.DateTime}
-	kustoParameters["ParamStartTimeMax"] = query.StartTimeMax
+	kustoStmt = kustoStmt.AddLiteral(` | where StartTime < ParamStartTimeMax`)
+	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMax", query.StartTimeMax)
 
-	kustoStmt = kustoStmt.Add(` | where TraceID in (TraceIDs) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`)
-
-	kustoStmt = kustoStmt.MustDefinitions(kusto.NewDefinitions().Must(kustoDefinitions)).MustParameters(kusto.NewParameters().Must(kustoParameters))
+	kustoStmt = kustoStmt.AddLiteral(` | where TraceID in (TraceIDs) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`)
 
 	r.logger.Debug(kustoStmt.String())
-	r.logger.Debug(kustoStmt.ValuesJSON())
 	clientRequestId := GetClientId()
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoParameters))...)
 	if err != nil {
 		return nil, err
 	}
@@ -416,16 +370,10 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 		CallCount value.Long `kusto:"CallCount"`
 	}
 
-	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getDependencies]).
-		MustDefinitions(
-			kusto.NewDefinitions().Must(
-				kusto.ParamTypes{
-					"ParamEndTs":    kusto.ParamType{Type: types.DateTime},
-					"ParamLookBack": kusto.ParamType{Type: types.Timespan},
-				},
-			)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamEndTs": endTs, "ParamLookBack": lookback}))
+	kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getDependenciesQuery).AddTable(r.tableName).AddLiteral(getDependenciesJoinQuery)
+	kustoParams := kql.NewParameters().AddDateTime("ParamEndTs", endTs).AddTimespan("ParamLookBack", lookback)
 	clientRequestId := GetClientId()
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoParams))...)
 	if err != nil {
 		return nil, err
 	}

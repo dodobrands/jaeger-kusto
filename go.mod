@@ -1,11 +1,11 @@
 module github.com/dodopizza/jaeger-kusto
 
-go 1.21
+go 1.22
 
-toolchain go1.21.0
+toolchain go1.23.0
 
 require (
-	github.com/Azure/azure-kusto-go v0.15.1
+	github.com/Azure/azure-kusto-go v0.16.1
 	github.com/hashicorp/go-hclog v1.6.2
 	github.com/jaegertracing/jaeger v1.55.0
 	github.com/spf13/viper v1.18.2
@@ -40,7 +40,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
