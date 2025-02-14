@@ -32,7 +32,7 @@ func TestTransformReferencesToLinks(t *testing.T) {
 
 			// Unmarshal the input file into a kustoSpan.
 			var inputSpan kustoSpan
-			json.Unmarshal(source, &inputSpan)
+			_ = json.Unmarshal(source, &inputSpan)
 
 			// >>> This is the actual code under test.
 			_, errt := transformReferencesToLinks(&inputSpan, logger)

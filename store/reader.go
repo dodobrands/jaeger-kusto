@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"go/types"
 	"strings"
 	"time"
 
@@ -52,16 +51,13 @@ func GetClientId() string {
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kusto.NewStmt("", kusto.UnsafeStmt(safetySwitch)).UnsafeAdd(queryMap[getTrace]).MustDefinitions(
-		kusto.NewDefinitions().Must(
-			kusto.ParamTypes{
-				"ParamTraceID": kusto.ParamType{Type: types.String},
-			},
-		)).MustParameters(kusto.NewParameters().Must(kusto.QueryValues{"ParamTraceID": traceID.String()}))
-	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
+	kustoStmt := kql.New("").AddTable(r.tableName).AddLiteral(getTraceQuery)
+	kustoStmtParams := kql.NewParameters().AddString("ParamTraceID", traceID.String())
+
 	clientRequestId := GetClientId()
 	// Append a client request id as well to the request
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoStmtParams))...)
+	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions,
+		kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoStmtParams))...)
 	if err != nil {
 		r.logger.Error("Failed running GetTrace query. TraceID: %s. ClientRequestId : %s", traceID.String(), clientRequestId)
 		return nil, err
@@ -210,7 +206,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		for k, v := range query.Tags {
 			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
 			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", replacedTag, v, replacedTag, v)
-			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
+			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
 		}
 	}
 
@@ -292,7 +288,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	if query.Tags != nil {
 		for k, v := range query.Tags {
 			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
-			kustoStmt = kustoStmt.UnsafeAdd(tagFilter)
+			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
 		}
 	}
 
