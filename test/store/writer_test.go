@@ -5,10 +5,11 @@ package test
 
 import (
 	"context"
-	"github.com/dodopizza/jaeger-kusto/config"
-	"github.com/dodopizza/jaeger-kusto/store"
 	"testing"
 	"time"
+
+	"github.com/dodopizza/jaeger-kusto/config"
+	"github.com/dodopizza/jaeger-kusto/store"
 
 	"github.com/stretchr/testify/assert"
 
@@ -61,7 +62,7 @@ func TestWriteSpan(tester *testing.T) {
 		}},
 	}
 
-	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
+	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
 	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span))
 	assert.NoError(tester, kustoStore.SpanWriter().WriteSpan(context.Background(), span2))

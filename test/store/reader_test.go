@@ -15,6 +15,9 @@ import (
 
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/dodopizza/jaeger-kusto/store"
+	"github.com/hashicorp/go-hclog"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
@@ -22,19 +25,21 @@ import (
 
 func TestKustoSpanReader_GetTrace(tester *testing.T) {
 
-	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
+	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
 	expectedOutput := fmt.Sprintf(`%s | where TraceID == ParamTraceID | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`, kustoConfig.TraceTableName)
-	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 	trace, _ := model.TraceIDFromString("3f6d8f4c5008352055c14804949d1e57")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var buf bytes.Buffer
-	log.SetOutput(&buf)
+	logger := hclog.New(&hclog.LoggerOptions{
+		Output: &buf,
+		Level:  hclog.Debug,
+	})
+	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 	defer func() {
 		log.SetOutput(os.Stderr)
 	}()
-
 	fulltrace, err := kustoStore.SpanReader().GetTrace(ctx, trace)
 	output := buf.String()
 
@@ -50,14 +55,14 @@ func TestKustoSpanReader_GetTrace(tester *testing.T) {
 }
 
 func TestKustoSpanReader_GetServices(t *testing.T) {
-	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
-	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
-	expectedOutput := fmt.Sprintf(`set query_results_cache_max_age = time(5m); %s 
-	| extend ProcessServiceName=tostring(ResourceAttributes.['service.name']) 
-	| summarize by ProcessServiceName 
-	| sort by ProcessServiceName asc`, kustoConfig.TraceTableName)
+	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
+	expectedOutput := fmt.Sprintf(`set query_results_cache_max_age = time(5m); %s | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']) | where ProcessServiceName!=\"\" | summarize by ProcessServiceName | sort by ProcessServiceName asc`, kustoConfig.TraceTableName)
 	var buf bytes.Buffer
-	log.SetOutput(&buf)
+	logger := hclog.New(&hclog.LoggerOptions{
+		Output: &buf,
+		Level:  hclog.Debug,
+	})
+	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 	defer func() {
 		log.SetOutput(os.Stderr)
 	}()
@@ -78,7 +83,7 @@ func TestKustoSpanReader_GetServices(t *testing.T) {
 }
 
 func TestKustoSpanReader_GetOperations(t *testing.T) {
-	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
+	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
 	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -106,7 +111,7 @@ func TestFindTraces(tester *testing.T) {
 		},
 	}
 
-	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
+	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
 	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -120,7 +125,7 @@ func TestFindTraces(tester *testing.T) {
 }
 
 func TestStore_DependencyReader(t *testing.T) {
-	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath)
+	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
 	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
 	dependencyLinks, err := kustoStore.DependencyReader().GetDependencies(context.Background(), time.Now(), 168*time.Hour)
 	if err != nil {

@@ -17,5 +17,7 @@ metadata:
   annotations:
     use-subpath: "true"
   labels:
-    io.kompose.service: kusto-jaeger-plugin
+    io.service.name: kusto-jaeger-plugin
+    app: {{ .Release.Name }}-app
   name: plugin-base-config
+  namespace: {{ .Release.Namespace }}

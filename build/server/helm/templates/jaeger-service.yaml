@@ -1,10 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  annotations:
-    kompose.version: 1.33.0 (3ce457399)
+
   labels:
-    io.kompose.service: jaeger
+    io.service.name: kusto-jaeger
   name: jaeger
 spec:
   ports:
@@ -33,4 +32,4 @@ spec:
       port: 14250
       targetPort: 14250
   selector:
-    io.kompose.service: jaeger
+    io.service.name: kusto-jaeger

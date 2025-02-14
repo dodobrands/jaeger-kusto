@@ -2,7 +2,9 @@ apiVersion: v1
 data:
   jaeger-kusto-config.json: |-
     {
+        {{- if .Values.authConfig.clientId }}
         "clientId": {{ .Values.authConfig.clientId | quote}},
+        {{- end }}
         {{- if .Values.authConfig.clientSecret }}
         "clientSecret": {{ .Values.authConfig.clientSecret | quote}},
         {{- end }}
@@ -13,12 +15,16 @@ data:
         "useManagedIdentity": {{default false .Values.authConfig.useManagedIdentity}},
         "database": {{ .Values.authConfig.database  | quote}},
         "endpoint": {{ .Values.authConfig.clusterUrl | quote}},
+        {{- if .Values.authConfig.tenantId }}
         "tenantId": {{ .Values.authConfig.tenantId | quote}}
+        {{- end }}
     }
 kind: ConfigMap
 metadata:
   annotations:
     use-subpath: "true"
   labels:
-    io.kompose.service: kusto-jaeger-plugin
+    io.service.name: kusto-jaeger-plugin
+    app: {{ .Release.Name }}-app
   name: plugin-auth-config
+  namespace: {{ .Release.Namespace }}

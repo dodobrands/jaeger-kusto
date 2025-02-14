@@ -1,29 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    kompose.version: 1.33.0 (3ce457399)
   labels:
-    io.kompose.service: jaeger
+    io.service.name: kusto-jaeger
   name: jaeger
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
-      io.kompose.service: jaeger
+      io.service.name: kusto-jaeger
   template:
     metadata:
       annotations:
-        kompose.version: 1.33.0 (3ce457399)
+        service.version: 1.1.0-Preview
       labels:
         io.kompose.network/server-default: "true"
-        io.kompose.service: jaeger
+        io.service.name: kusto-jaeger
     spec:
       containers:
         - args:
             - --grpc-storage.server=kusto-jaeger-plugin:8989
             - --grpc-storage.connection-timeout=60s
             - --grpc-storage.tls.enabled=false
+            - --query.base-path=/tracing
           env:
             - name: SPAN_STORAGE_TYPE
               value: grpc-plugin

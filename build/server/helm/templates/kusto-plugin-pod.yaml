@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Release.Namespace }} 
+  labels:
+    io.service.name: kusto-jaeger-plugin
+    app: {{ .Release.Name }}-app
+  name: kusto-jaeger-plugin
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      io.service.name: kusto-jaeger-plugin
+      app: {{ .Release.Name }}-app
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-app
+        io.kompose.network/server-default: "true"
+        io.service.name: kusto-jaeger-plugin
+        {{- if .Values.authConfig.useWorkloadIdentity }}
+        azure.workload.identity/use: "true"
+        {{- end }}      
+    spec:
+      {{- if .Values.authConfig.serviceAccountName }}
+      serviceAccountName: {{ .Values.authConfig.serviceAccountName }}
+      {{- end }}        
+      containers:
+        - args:
+            - --config=/config/jaeger-kusto-plugin-config.json
+          env:
+            - name: JAEGER_AGENT_HOST
+              value: jaeger
+            - name: JAEGER_AGENT_PORT
+              value: "6831"
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          name: kusto-jaeger-plugin
+          volumeMounts:
+            - mountPath: /config/jaeger-kusto-config.json
+              name: plugin-auth-config
+              subPath: jaeger-kusto-config.json
+            - mountPath: /config/jaeger-kusto-plugin-config.json
+              name: plugin-base-config
+              subPath: jaeger-kusto-plugin-config.json          
+          ports:
+            - containerPort: 6060
+              hostPort: 6060
+              protocol: TCP
+            - containerPort: 8989
+              hostPort: 8989
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: 8989
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      restartPolicy: Always
+      volumes:
+        - name: plugin-auth-config
+          configMap:
+            name: plugin-auth-config
+            namespace: {{ .Release.Namespace }}
+            items:
+              - key: jaeger-kusto-config.json
+                path: jaeger-kusto-config.json
+        - name: plugin-base-config
+          configMap:
+            name: plugin-base-config
+            namespace: {{ .Release.Namespace }}
+            items:
+              - key: jaeger-kusto-plugin-config.json
+                path: jaeger-kusto-plugin-config.json
+
+
+# metadata:
+#   labels:
+#     io.kompose.network/server-default: "true"
+#     io.service.name: kusto-jaeger-plugin
+#     {{- if .Values.authConfig.useWorkloadIdentity }}
+#     azure.workload.identity/use: "true"
+#     {{- end }}      
+#   name: kusto-jaeger-plugin
+# spec:
+#   {{- if .Values.authConfig.serviceAccountName }}
+#   serviceAccountName: {{ .Values.authConfig.serviceAccountName }}
+#   {{- end }}  
+#   containers:
+#     - args:
+#         - --config=/config/jaeger-kusto-plugin-config.json
+#       env:
+#         - name: JAEGER_AGENT_HOST
+#           value: jaeger
+#         - name: JAEGER_AGENT_PORT
+#           value: "6831"
+#       image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+#       imagePullPolicy: {{ .Values.image.pullPolicy }}
+#       name: kusto-jaeger-plugin
+#       ports:
+#         - containerPort: 6060
+#           hostPort: 6060
+#           protocol: TCP
+#         - containerPort: 8989
+#           hostPort: 8989
+#           protocol: TCP
+#       volumeMounts:
+#         - mountPath: /config/jaeger-kusto-config.json
+#           name: plugin-auth-config
+#           subPath: jaeger-kusto-config.json
+#         - mountPath: /config/jaeger-kusto-plugin-config.json
+#           name: plugin-base-config
+#           subPath: jaeger-kusto-plugin-config.json
+#   restartPolicy: Never
+#   volumes:
+#     - configMap:
+#         items:
+#           - key: jaeger-kusto-config.json
+#             path: jaeger-kusto-config.json
+#         name: plugin-auth-config
+#       name: plugin-auth-config
+#     - configMap:
+#         items:
+#           - key: jaeger-kusto-plugin-config.json
+#             path: jaeger-kusto-plugin-config.json
+#         name: plugin-base-config
+#       name: plugin-base-config
