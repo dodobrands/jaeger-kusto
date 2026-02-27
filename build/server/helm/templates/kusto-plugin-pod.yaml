@@ -50,6 +50,11 @@ spec:
             - containerPort: 8989
               hostPort: 8989
               protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - containerPort: 9090
+              hostPort: 9090
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             tcpSocket:
               port: 8989
@@ -60,14 +65,12 @@ spec:
         - name: plugin-auth-config
           configMap:
             name: plugin-auth-config
-            namespace: {{ .Release.Namespace }}
             items:
               - key: jaeger-kusto-config.json
                 path: jaeger-kusto-config.json
         - name: plugin-base-config
           configMap:
             name: plugin-base-config
-            namespace: {{ .Release.Namespace }}
             items:
               - key: jaeger-kusto-plugin-config.json
                 path: jaeger-kusto-plugin-config.json

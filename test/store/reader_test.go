@@ -36,7 +36,7 @@ func TestKustoSpanReader_GetTrace(tester *testing.T) {
 		Output: &buf,
 		Level:  hclog.Debug,
 	})
-	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, _ := store.NewStore(kustoConfig, nil, logger)
 	defer func() {
 		log.SetOutput(os.Stderr)
 	}()
@@ -62,7 +62,7 @@ func TestKustoSpanReader_GetServices(t *testing.T) {
 		Output: &buf,
 		Level:  hclog.Debug,
 	})
-	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, _ := store.NewStore(kustoConfig, nil, logger)
 	defer func() {
 		log.SetOutput(os.Stderr)
 	}()
@@ -84,7 +84,7 @@ func TestKustoSpanReader_GetServices(t *testing.T) {
 
 func TestKustoSpanReader_GetOperations(t *testing.T) {
 	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
-	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, _ := store.NewStore(kustoConfig, nil, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -112,7 +112,7 @@ func TestFindTraces(tester *testing.T) {
 	}
 
 	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
-	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, _ := store.NewStore(kustoConfig, nil, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -126,7 +126,7 @@ func TestFindTraces(tester *testing.T) {
 
 func TestStore_DependencyReader(t *testing.T) {
 	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
-	kustoStore, _ := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, _ := store.NewStore(kustoConfig, nil, logger)
 	dependencyLinks, err := kustoStore.DependencyReader().GetDependencies(context.Background(), time.Now(), 168*time.Hour)
 	if err != nil {
 		logger.Error("can't find dependencyLinks", err.Error())
@@ -158,7 +158,7 @@ func TestFindTracesWithDurationMaxVerification(t *testing.T) {
 		Level:  hclog.Debug,
 	})
 
-	kustoStore, err := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, err := store.NewStore(kustoConfig, nil, logger)
 	if err != nil {
 		t.Skipf("Skipping test due to store creation error: %v", err)
 		return
@@ -202,7 +202,7 @@ func TestFindTracesWithDurationMax(t *testing.T) {
 		Level:  hclog.Debug,
 	})
 
-	kustoStore, err := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, err := store.NewStore(kustoConfig, nil, logger)
 	if err != nil {
 		t.Skipf("Skipping test due to store creation error: %v", err)
 		return
@@ -247,7 +247,7 @@ func TestFindTracesWithBothDurationMinAndMax(t *testing.T) {
 		Level:  hclog.Debug,
 	})
 
-	kustoStore, err := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, err := store.NewStore(kustoConfig, nil, logger)
 	if err != nil {
 		t.Skipf("Skipping test due to store creation error: %v", err)
 		return
@@ -295,7 +295,7 @@ func TestFindTraceIDsWithDurationMax(t *testing.T) {
 		Level:  hclog.Debug,
 	})
 
-	kustoStore, err := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, err := store.NewStore(kustoConfig, nil, logger)
 	if err != nil {
 		t.Skipf("Skipping test due to store creation error: %v", err)
 		return
@@ -339,7 +339,7 @@ func TestFindTraceIDsWithDurationMin(t *testing.T) {
 		Level:  hclog.Debug,
 	})
 
-	kustoStore, err := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, err := store.NewStore(kustoConfig, nil, logger)
 	if err != nil {
 		t.Skipf("Skipping test due to store creation error: %v", err)
 		return
@@ -381,7 +381,7 @@ func TestFindTraceIDsWithBothDurationMinAndMax(t *testing.T) {
 		Level:  hclog.Debug,
 	})
 
-	kustoStore, err := store.NewStore(testPluginConfig, kustoConfig, logger)
+	kustoStore, err := store.NewStore(kustoConfig, nil, logger)
 	if err != nil {
 		t.Skipf("Skipping test due to store creation error: %v", err)
 		return

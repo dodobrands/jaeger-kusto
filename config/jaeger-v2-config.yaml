@@ -1,0 +1,49 @@
+# Jaeger V2 configuration with Kusto trace backend and RED metrics
+#
+# This configuration uses:
+#   - gRPC remote storage for traces → jaeger-kusto plugin
+#   - PromQL shim for metrics → kusto-promql-shim (built into jaeger-kusto)
+#
+# Start the jaeger-kusto plugin with metricsEnabled=true first,
+# then start Jaeger V2 with this config.
+
+extensions:
+  jaeger_storage:
+    backends:
+      kusto_traces:
+        grpc:
+          endpoint: "jaeger-kusto:8989"
+          timeout: 30s
+          tls:
+            insecure: true
+
+    metric_backends:
+      kusto_metrics:
+        prometheus:
+          endpoint: "http://jaeger-kusto:9090"
+
+  jaeger_query:
+    storage:
+      traces: kusto_traces
+      metrics: kusto_metrics
+    ui:
+      config_file: /etc/jaeger/jaeger-ui.json
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: kusto_traces
+
+service:
+  extensions: [jaeger_storage, jaeger_query]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [jaeger_storage_exporter]

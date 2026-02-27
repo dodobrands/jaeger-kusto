@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -249,49 +248,3 @@ func escapeProcessTags(processTagsString []byte) {
 	}
 }
 
-func getTagsValues(tags []model.KeyValue) []string {
-	var values []string
-	for i := range tags {
-		values = append(values, tags[i].VStr)
-	}
-	return values
-}
-
-// TransformSpanToStringArray converts span to string ready for Kusto ingestion
-func TransformSpanToStringArray(span *model.Span) ([]string, error) {
-	spanConverter := dbmodel.NewFromDomain(true, getTagsValues(span.Tags), TagDotReplacementCharacter)
-	jsonSpan := spanConverter.FromDomainEmbedProcess(span)
-	references, err := json.Marshal(jsonSpan.References)
-	if err != nil {
-		return nil, err
-	}
-	tags, err := json.Marshal(jsonSpan.Tag)
-	if err != nil {
-		return nil, err
-	}
-	logs, err := json.Marshal(jsonSpan.Logs)
-	if err != nil {
-		return nil, err
-	}
-	processTags, err := json.Marshal(jsonSpan.Process.Tag)
-	if err != nil {
-		return nil, err
-	}
-
-	kustoStringSpan := []string{
-		span.TraceID.String(),
-		span.SpanID.String(),
-		span.OperationName,
-		string(references),
-		strconv.FormatUint(uint64(span.Flags), 10),
-		span.StartTime.Format(time.RFC3339Nano),
-		value.Timespan{Value: span.Duration, Valid: true}.Marshal(),
-		string(tags),
-		string(logs),
-		span.Process.ServiceName,
-		string(processTags),
-		span.ProcessID,
-	}
-
-	return kustoStringSpan, err
-}

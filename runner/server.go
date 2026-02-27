@@ -6,7 +6,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 	"google.golang.org/grpc"
-	"io"
 	"net"
 	"net/url"
 	"os"
@@ -48,7 +47,7 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 	}
 
 	logger.Info("starting server", "address", address, "scheme", scheme)
-	wg := registerGracefulShutdown(server, store, logger)
+	wg := registerGracefulShutdown(server, logger)
 	if err := server.Serve(listener); err != nil {
 		return err
 	}
@@ -57,7 +56,7 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 	return nil
 }
 
-func registerGracefulShutdown(server *grpc.Server, store shared.StoragePlugin, logger hclog.Logger) *sync.WaitGroup {
+func registerGracefulShutdown(server *grpc.Server, logger hclog.Logger) *sync.WaitGroup {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
@@ -66,15 +65,8 @@ func registerGracefulShutdown(server *grpc.Server, store shared.StoragePlugin, l
 
 	go func() {
 		sig := <-signals
-		logger.Info("received signal, attempting gracefully stop server and plugin", "signal", sig)
+		logger.Info("received signal, attempting gracefully stop server", "signal", sig)
 		server.GracefulStop()
-
-		// perform cleanup logic on writer
-		c, ok := store.SpanWriter().(io.Closer)
-		if ok {
-			_ = c.Close()
-		}
-
 		logger.Info("server stopped")
 		wg.Done()
 	}()

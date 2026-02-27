@@ -10,7 +10,9 @@ data:
         "remoteMode": {{ default true .Values.baseConfig.remoteMode }},
         "tracingSamplerPercentage":   {{ default 0.0 .Values.baseConfig.tracingSamplerPercentage }},
         "readNoTruncation": {{ default false .Values.baseConfig.readNoTruncation }},
-        "readNoTimeout": {{ default false .Values.baseConfig.readNoTimeout }}
+        "readNoTimeout": {{ default false .Values.baseConfig.readNoTimeout }},
+        "metricsEnabled": {{ default false .Values.metrics.enabled }},
+        "metricsListenAddress": {{ .Values.metrics.prometheusListenAddress | default ":9090" | quote }}
     }
 kind: ConfigMap
 metadata:

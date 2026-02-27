@@ -16,13 +16,12 @@ type PluginConfig struct {
 	RemoteListenAddress         string  `json:"remoteListenAddress"`
 	TracingSamplerPercentage    float64 `json:"tracingSamplerPercentage"`
 	TracingRPCMetrics           bool    `json:"tracingRPCMetrics"`
-	WriterBatchMaxBytes         int     `json:"writerBatchMaxBytes"`
-	WriterBatchTimeoutSeconds   int     `json:"writerBatchTimeoutSeconds"`
-	WriterSpanBufferSize        int     `json:"writerSpanBufferSize"`
-	WriterWorkersCount          int     `json:"writerWorkersCount"`
-	DisableJaegerUiTraces       bool    `json:"disableJaegerUiTraces"`
 	ReadNoTruncation            bool    `json:"readNoTruncation"`
 	ReadNoTimeout               bool    `json:"readNoTimeout"`
+	MetricsEnabled              bool    `json:"metricsEnabled"`
+	MetricsListenAddress        string  `json:"metricsListenAddress"`
+	CacheDiscoveryQueries       bool    `json:"cacheDiscoveryQueries"`
+	CacheDiscoveryTTL           string  `json:"cacheDiscoveryTTL"`
 }
 
 // NewDefaultPluginConfig returns default configuration options
@@ -35,15 +34,14 @@ func NewDefaultPluginConfig() *PluginConfig {
 		LogJson:                     false,
 		RemoteMode:                  false,
 		RemoteListenAddress:         "tcp://:8989",
-		TracingSamplerPercentage:    0.0,     // disabled by default
-		TracingRPCMetrics:           false,   // disabled by default
-		WriterBatchMaxBytes:         1048576, // 1 Mb by default
-		WriterBatchTimeoutSeconds:   5,
-		WriterSpanBufferSize:        100,
-		WriterWorkersCount:          5,
-		DisableJaegerUiTraces:       true, //disable UI logs of jaeger into OTELTraces. No traces from Jaeger UI will be sent
+		TracingSamplerPercentage:    0.0,   // disabled by default
+		TracingRPCMetrics:           false, // disabled by default
 		ReadNoTruncation:            false,
 		ReadNoTimeout:               false,
+		MetricsEnabled:              false,
+		MetricsListenAddress:        ":9090",
+		CacheDiscoveryQueries:       false,
+		CacheDiscoveryTTL:           "6h",
 	}
 }
 

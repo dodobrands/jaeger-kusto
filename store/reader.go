@@ -24,6 +24,8 @@ type kustoSpanReader struct {
 	tableName          string
 	logger             hclog.Logger
 	defaultReadOptions []kusto.QueryOption
+	cache              *discoveryCache      // nil when caching is disabled
+	depRefresher       *dependencyRefresher // nil when caching is disabled
 }
 
 type kustoReaderClient interface {
@@ -31,13 +33,14 @@ type kustoReaderClient interface {
 }
 
 
-func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger, defaultReadOptions []kusto.QueryOption) (*kustoSpanReader, error) {
+func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger, defaultReadOptions []kusto.QueryOption, cache *discoveryCache) (*kustoSpanReader, error) {
 	return &kustoSpanReader{
-		factory.Reader(),
-		factory.Database,
-		factory.Table,
-		logger,
-		defaultReadOptions,
+		client:             factory.Reader(),
+		database:           factory.Database,
+		tableName:          factory.Table,
+		logger:             logger,
+		defaultReadOptions: defaultReadOptions,
+		cache:              cache,
 	}, nil
 }
 
@@ -89,6 +92,14 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 
 // GetServices finds all possible services that spanstore contains
 func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
+	const cacheKey = "services"
+	if r.cache != nil {
+		if cached, ok := r.cache.get(cacheKey); ok {
+			r.logger.Debug("GetServices: returning cached result")
+			return cached.([]string), nil
+		}
+	}
+
 	clientRequestId := GetClientId()
 	kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getServicesQuery)
 	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
@@ -122,11 +133,24 @@ func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
+	if r.cache != nil {
+		r.cache.set(cacheKey, services)
+		r.logger.Debug("GetServices: cached %d services", len(services))
+	}
+
 	return services, err
 }
 
 // GetOperations finds all operations by provided Service and SpanKind
 func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.OperationQueryParameters) ([]spanstore.Operation, error) {
+	cacheKey := fmt.Sprintf("operations:%s:%s", query.ServiceName, query.SpanKind)
+	if r.cache != nil {
+		if cached, ok := r.cache.get(cacheKey); ok {
+			r.logger.Debug("GetOperations: returning cached result for %s", cacheKey)
+			return cached.([]spanstore.Operation), nil
+		}
+	}
+
 	type Operation struct {
 		OperationName string `kusto:"OperationName"`
 		SpanKind      string `kusto:"SpanKind"`
@@ -172,6 +196,11 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 
 	if err != nil {
 		return nil, err
+	}
+
+	if r.cache != nil {
+		r.cache.set(cacheKey, operations)
+		r.logger.Debug("GetOperations: cached %d operations for %s", len(operations), cacheKey)
 	}
 
 	return operations, err
@@ -364,15 +393,38 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	return traces, err
 }
 
-// GetDependencies returns DependencyLinks of services
+// maxDependencyLookback caps the time window for dependency queries to avoid OOM on large datasets.
+const maxDependencyLookback = 2 * time.Hour
+
+// GetDependencies returns DependencyLinks of services.
+// When caching is enabled, results are served from a background-refreshed cache.
 func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
+	// When background refresh is active, always serve from cache
+	if r.depRefresher != nil {
+		if links, ok := r.depRefresher.getCachedDependencies(ctx); ok {
+			r.logger.Debug("GetDependencies: returning from background cache", "links", len(links))
+			return links, nil
+		}
+		r.logger.Warn("GetDependencies: cache not available, falling back to direct query")
+	}
+
+	if lookback > maxDependencyLookback {
+		r.logger.Warn("Capping dependency lookback", "requested", lookback, "max", maxDependencyLookback)
+		lookback = maxDependencyLookback
+	}
+
+	return r.fetchDependencies(ctx, endTs, lookback)
+}
+
+// fetchDependencies executes the dependency graph query against Kusto directly.
+func (r *kustoSpanReader) fetchDependencies(ctx context.Context, endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
 	type kustoDependencyLink struct {
 		Parent    string     `kusto:"Parent"`
 		Child     string     `kusto:"Child"`
 		CallCount value.Long `kusto:"CallCount"`
 	}
 
-	kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getDependenciesQuery).AddTable(r.tableName).AddLiteral(getDependenciesJoinQuery)
+	kustoStmt := kql.New(queryResultsCacheAge + "let spans = ").AddTable(r.tableName).AddLiteral(getDependenciesGraphQuery)
 	kustoParams := kql.NewParameters().AddDateTime("ParamEndTs", endTs).AddTimespan("ParamLookBack", lookback)
 	clientRequestId := GetClientId()
 	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoParams))...)
@@ -400,5 +452,6 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 			return nil
 		},
 	)
+
 	return dependencyLinks, err
 }

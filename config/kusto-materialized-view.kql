@@ -1,0 +1,53 @@
+-- Kusto Materialized View for RED Metrics (SPM)
+-- Run this script in your Azure Data Explorer (Kusto) database
+-- to create the materialized view that pre-aggregates span metrics.
+--
+-- Prerequisites:
+--   - The OTELTraces table must exist and be receiving data
+--   - Adjust the table name if different from 'OTELTraces'
+--
+-- This creates a materialized view that aggregates per-minute metrics:
+--   - call_count: total span count
+--   - error_count: spans with STATUS_CODE_ERROR
+--   - duration percentiles: P50, P75, P95, P99 in milliseconds
+--
+-- The view is grouped by: ServiceName, SpanName, SpanKind, 1-minute time buckets
+--
+-- NOTE ON BACKFILL:
+--   - The "backfill=true" option will process existing data in the OTELTraces table to
+--     populate the materialized view. On large production trace tables this can be
+--     resource-intensive and may impact cluster performance.
+--   - Before running this in production, verify your cluster has sufficient capacity
+--     and consider running during a low-traffic window or first on a non-production
+--     environment.
+--   - For initial setup, backfill is optional:
+--       * Keep "backfill=true" if you need historical data populated immediately.
+--       * Remove the "with (backfill=true)" clause (or change to "backfill=false")
+--         if you only need the view to process new incoming data.
+
+.create-or-alter async materialized-view with (backfill=true) SpanMetrics on table OTELTraces
+{
+    OTELTraces
+    | extend 
+        ServiceName = tostring(ResourceAttributes.['service.name']),
+        Duration_ms = datetime_diff('millisecond', EndTime, StartTime),
+        StatusCode = tostring(SpanStatus)
+    | summarize 
+        call_count = count(),
+        error_count = countif(StatusCode == 'STATUS_CODE_ERROR'),
+        duration_sum_ms = sum(Duration_ms),
+        p50_ms = percentile(Duration_ms, 50),
+        p75_ms = percentile(Duration_ms, 75),
+        p95_ms = percentile(Duration_ms, 95),
+        p99_ms = percentile(Duration_ms, 99)
+      by ServiceName, SpanName, SpanKind, bin(StartTime, 1m)
+}
+
+-- Verify the view was created:
+-- .show materialized-view SpanMetrics
+
+-- Query to test the materialized view:
+-- SpanMetrics
+-- | where StartTime > ago(1h)
+-- | summarize sum(call_count), sum(error_count) by ServiceName
+-- | order by sum_call_count desc

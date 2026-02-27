@@ -5,5 +5,7 @@
     "logJson": true,
     "remoteMode": true,
     "tracingSamplerPercentage": 0.0,
-    "tracingRPCMetrics": false
+    "tracingRPCMetrics": false,
+    "metricsEnabled": true,
+    "metricsListenAddress": ":9090"
 }

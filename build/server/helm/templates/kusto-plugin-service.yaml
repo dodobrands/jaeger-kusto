@@ -12,5 +12,10 @@ spec:
     - name: "8989"
       port: 8989
       targetPort: 8989
+    {{- if .Values.metrics.enabled }}
+    - name: "9090"
+      port: 9090
+      targetPort: 9090
+    {{- end }}
   selector:
     io.service.name: kusto-jaeger-plugin

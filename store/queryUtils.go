@@ -47,13 +47,19 @@ const (
 	| sort by count_
 	| project OperationName=SpanName,SpanKind`
 
-	getDependenciesQuery = ` | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
-	| where StartTime < ParamEndTs and StartTime > (ParamEndTs-ParamLookBack)
-	| project ProcessServiceName, SpanID, ChildOfSpanId = ParentID | join (`
-	getDependenciesJoinQuery = ` | extend ProcessServiceName=tostring(ResourceAttributes.['service.name'])
-	| project ChildOfSpanId=SpanID, ParentService=ProcessServiceName) on ChildOfSpanId | where ProcessServiceName != ParentService
-	| extend Call=pack('Parent', ParentService, 'Child', ProcessServiceName) | summarize CallCount=count() by tostring(Call) | extend Call=parse_json(Call)
-	| evaluate bag_unpack(Call)`
+	// getDependenciesGraphQuery uses Kusto graph semantics for a single time-filtered scan
+	// instead of the previous self-join which scanned the full table on the parent side.
+	// The table name is injected via AddTable before this literal.
+	getDependenciesGraphQuery = `
+	| where StartTime between ((ParamEndTs - ParamLookBack) .. ParamEndTs)
+	| extend ServiceName = tostring(ResourceAttributes.['service.name'])
+	| project SpanID, ParentID, ServiceName;
+	spans
+	| make-graph ParentID --> SpanID with spans on SpanID
+	| graph-match (parent)-[]->(child)
+		where parent.ServiceName != child.ServiceName
+		project Parent=parent.ServiceName, Child=child.ServiceName
+	| summarize CallCount=count() by Parent, Child`
 
 	getTraceIdBaseQuery = ` | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name'])`
 

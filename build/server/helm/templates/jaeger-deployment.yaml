@@ -23,10 +23,19 @@ spec:
             - --grpc-storage.connection-timeout=60s
             - --grpc-storage.tls.enabled=false
             - --query.base-path=/tracing
+            {{- if .Values.metrics.enabled }}
+            - --prometheus.server-url={{ .Values.metrics.prometheusServerUrl | default "http://kusto-jaeger-plugin:9090" }}
+            - --prometheus.query.normalize-calls=true
+            - --prometheus.query.normalize-duration=true
+            {{- end }}
           env:
             - name: SPAN_STORAGE_TYPE
-              value: grpc-plugin
-          image: jaegertracing/all-in-one:1.56
+              value: grpc
+            {{- if .Values.metrics.enabled }}
+            - name: METRICS_STORAGE_TYPE
+              value: prometheus
+            {{- end }}
+          image: jaegertracing/all-in-one:1.76.0
           name: jaeger
           ports:
             - containerPort: 16686
@@ -35,4 +44,19 @@ spec:
             - containerPort: 16687
               hostPort: 16687
               protocol: TCP
+          {{- if .Values.metrics.enabled }}
+          volumeMounts:
+            - name: jaeger-ui-config
+              mountPath: /etc/jaeger/jaeger-ui.json
+              subPath: jaeger-ui.json
+          {{- end }}
       restartPolicy: Always
+      {{- if .Values.metrics.enabled }}
+      volumes:
+        - name: jaeger-ui-config
+          configMap:
+            name: jaeger-ui-config
+            items:
+              - key: jaeger-ui.json
+                path: jaeger-ui.json
+      {{- end }}

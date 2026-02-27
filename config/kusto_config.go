@@ -16,6 +16,7 @@ type KustoConfig struct {
 	Endpoint             string              `json:"endpoint"`
 	Database             string              `json:"database"`
 	TraceTableName       string              `json:"traceTableName"`
+	MetricsViewName      string              `json:"metricsViewName,omitempty"`
 	ClientRequestOptions []kusto.QueryOption `json:"clientRequestOptions,omitempty"`
 }
 

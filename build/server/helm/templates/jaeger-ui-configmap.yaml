@@ -1,0 +1,16 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    io.service.name: kusto-jaeger
+  name: jaeger-ui-config
+  namespace: {{ .Release.Namespace }}
+data:
+  jaeger-ui.json: |
+    {
+      "monitor": {
+        "menuEnabled": true
+      }
+    }
+{{- end }}

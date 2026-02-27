@@ -14,9 +14,16 @@ data:
         "useWorkloadIdentity": {{default false .Values.authConfig.useWorkloadIdentity }},
         "useManagedIdentity": {{default false .Values.authConfig.useManagedIdentity}},
         "database": {{ .Values.authConfig.database  | quote}},
+        {{- if or .Values.authConfig.tenantId .Values.authConfig.metricsViewName }}
         "endpoint": {{ .Values.authConfig.clusterUrl | quote}},
+        {{- else }}
+        "endpoint": {{ .Values.authConfig.clusterUrl | quote}}
+        {{- end }}
         {{- if .Values.authConfig.tenantId }}
-        "tenantId": {{ .Values.authConfig.tenantId | quote}}
+        "tenantId": {{ .Values.authConfig.tenantId | quote}}{{- if .Values.authConfig.metricsViewName }},{{- end }}
+        {{- end }}
+        {{- if .Values.authConfig.metricsViewName }}
+        "metricsViewName": {{ .Values.authConfig.metricsViewName | quote}}
         {{- end }}
     }
 kind: ConfigMap
