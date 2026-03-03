@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,25 +65,25 @@ var spanKindToKusto = map[string]string{
 }
 
 // buildTagFilter returns a KQL filter clause for a tag key/value pair.
-// Synthetic tags (otel.status_code, error, span.kind) are mapped to native Kusto columns
-// since they are not stored in TraceAttributes/ResourceAttributes.
+// Well-known synthetic tags (otel.status_code, error, span.kind) are mapped to native Kusto columns
+// in addition to TraceAttributes/ResourceAttributes, since they may not be stored as span attributes.
 func buildTagFilter(k, v string) string {
 	switch k {
 	case "otel.status_code":
 		if kustoVal, ok := otelStatusCodeToKusto[v]; ok {
-			return fmt.Sprintf(" | where SpanStatus == '%s'", kustoVal)
+			return fmt.Sprintf(" | where SpanStatus == '%s' or TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", kustoVal, k, v, k, v)
 		}
-		return fmt.Sprintf(" | where SpanStatus == '%s'", v)
+		return fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
 	case "error":
 		if v == "true" {
-			return " | where SpanStatus == 'STATUS_CODE_ERROR'"
+			return fmt.Sprintf(" | where SpanStatus == 'STATUS_CODE_ERROR' or TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
 		}
-		return " | where SpanStatus != 'STATUS_CODE_ERROR'"
+		return fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
 	case "span.kind":
 		if kustoVal, ok := spanKindToKusto[v]; ok {
-			return fmt.Sprintf(" | where SpanKind == '%s'", kustoVal)
+			return fmt.Sprintf(" | where SpanKind == '%s' or TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", kustoVal, k, v, k, v)
 		}
-		return fmt.Sprintf(" | where SpanKind == '%s'", v)
+		return fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
 	default:
 		return fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
 	}
@@ -247,8 +246,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 
 	if query.Tags != nil {
 		for k, v := range query.Tags {
-			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
-			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
+			kustoStmt = kustoStmt.AddUnsafe(buildTagFilter(k, v))
 		}
 	}
 
@@ -259,12 +257,12 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMax", query.StartTimeMax)
 
 	if query.DurationMin != 0 {
-		kustoStmt = kustoStmt.AddLiteral(` | where Duration > ParamDurationMin`)
+		kustoStmt = kustoStmt.AddLiteral(` | where datetime_diff('microsecond', EndTime, StartTime) >= ParamDurationMin`)
 		kustoParameters = kustoParameters.AddLong("ParamDurationMin", query.DurationMin.Microseconds())
 	}
 
 	if query.DurationMax != 0 {
-		kustoStmt = kustoStmt.AddLiteral(` | where Duration < ParamDurationMax`)
+		kustoStmt = kustoStmt.AddLiteral(` | where datetime_diff('microsecond', EndTime, StartTime) <= ParamDurationMax`)
 		kustoParameters = kustoParameters.AddLong("ParamDurationMax", query.DurationMax.Microseconds())
 	}
 
@@ -275,7 +273,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		kustoParameters = kustoParameters.AddInt("ParamNumTraces", int32(query.NumTraces))
 	}
 
-	r.logger.Debug("FindTraceIDs query: %s", kustoStmt.String())
+	r.logger.Info("FindTraceIDs query", "kql", kustoStmt.String(), "durationMin_us", query.DurationMin.Microseconds(), "durationMax_us", query.DurationMax.Microseconds(), "service", query.ServiceName, "startMin", query.StartTimeMin, "startMax", query.StartTimeMax)
 	clientRequestId := GetClientId()
 	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoParameters))...)
 	if err != nil {
@@ -293,6 +291,10 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 			return nil, err
 		}
 		traceIds = append(traceIds, traceID)
+	}
+
+	if len(traceIds) == 0 {
+		r.logger.Warn("FindTraceIDs: query returned 0 results", "tags", query.Tags, "service", query.ServiceName, "durationMin", query.DurationMin, "durationMax", query.DurationMax, "startMin", query.StartTimeMin, "startMax", query.StartTimeMax)
 	}
 
 	return traceIds, err
@@ -323,8 +325,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	if query.Tags != nil {
 		for k, v := range query.Tags {
-			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
-			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
+			kustoStmt = kustoStmt.AddUnsafe(buildTagFilter(k, v))
 		}
 	}
 
@@ -335,12 +336,12 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMax", query.StartTimeMax)
 
 	if query.DurationMin != 0 {
-		kustoStmt = kustoStmt.AddLiteral(` | where Duration > ParamDurationMin`)
+		kustoStmt = kustoStmt.AddLiteral(` | where datetime_diff('microsecond', EndTime, StartTime) >= ParamDurationMin`)
 		kustoParameters = kustoParameters.AddLong("ParamDurationMin", query.DurationMin.Microseconds())
 	}
 
 	if query.DurationMax != 0 {
-		kustoStmt = kustoStmt.AddLiteral(` | where Duration < ParamDurationMax`)
+		kustoStmt = kustoStmt.AddLiteral(` | where datetime_diff('microsecond', EndTime, StartTime) <= ParamDurationMax`)
 		kustoParameters = kustoParameters.AddLong("ParamDurationMax", query.DurationMax.Microseconds())
 	}
 
@@ -359,7 +360,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	kustoStmt = kustoStmt.AddLiteral(` | where TraceID in (TraceIDs) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes|extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`)
 
-	r.logger.Debug("FindTraces query: %s", kustoStmt.String())
+	r.logger.Info("FindTraces query", "kql", kustoStmt.String(), "durationMin_us", query.DurationMin.Microseconds(), "durationMax_us", query.DurationMax.Microseconds(), "service", query.ServiceName, "startMin", query.StartTimeMin, "startMax", query.StartTimeMax)
 	clientRequestId := GetClientId()
 	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoParameters))...)
 	if err != nil {
@@ -390,6 +391,11 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		//r.logger.Debug("Trace ==> " + trace.String())
 		traces = append(traces, &trace)
 	}
+
+	if len(traces) == 0 {
+		r.logger.Warn("FindTraces: query returned 0 results", "tags", query.Tags, "service", query.ServiceName, "durationMin", query.DurationMin, "durationMax", query.DurationMax, "startMin", query.StartTimeMin, "startMax", query.StartTimeMax)
+	}
+
 	return traces, err
 }
 
