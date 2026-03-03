@@ -1,16 +1,16 @@
 package store
 
 import (
-	"github.com/Azure/azure-kusto-go/kusto"
+	"github.com/Azure/azure-kusto-go/azkustodata"
 )
 
 type kustoFactory struct {
 	Database string
 	Table    string
-	client   *kusto.Client
+	client   *azkustodata.Client
 }
 
-func newKustoFactory(client *kusto.Client, database string, table string) *kustoFactory {
+func newKustoFactory(client *azkustodata.Client, database string, table string) *kustoFactory {
 	return &kustoFactory{
 		client:   client,
 		Database: database,

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto"
+	"github.com/Azure/azure-kusto-go/azkustodata"
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
@@ -20,30 +20,30 @@ type store struct {
 
 // NewKustoClient creates a new Kusto client from the given configuration.
 // This is exported for reuse by the metrics server.
-func NewKustoClient(kc *config.KustoConfig, logger hclog.Logger) (*kusto.Client, error) {
-	var kcsb *kusto.ConnectionStringBuilder
+func NewKustoClient(kc *config.KustoConfig, logger hclog.Logger) (*azkustodata.Client, error) {
+	var kcsb *azkustodata.ConnectionStringBuilder
 	if kc.UseManagedIdentity {
 		if kc.ClientID == "" {
 			logger.Info("Using system managed identity")
-			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithSystemManagedIdentity()
+			kcsb = azkustodata.NewConnectionStringBuilder(kc.Endpoint).WithSystemManagedIdentity()
 		} else {
 			logger.Info("Using user managed identity")
-			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithUserManagedIdentity(kc.ClientID)
+			kcsb = azkustodata.NewConnectionStringBuilder(kc.Endpoint).WithUserAssignedIdentityClientId(kc.ClientID)
 		}
 	} else {
 		if kc.UseWorkloadIdentity {
 			logger.Info("Using workload identity for authentication")
-			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithDefaultAzureCredential()
+			kcsb = azkustodata.NewConnectionStringBuilder(kc.Endpoint).WithDefaultAzureCredential()
 		} else {
 			if kc.ClientID == "" || kc.ClientSecret == "" || kc.TenantID == "" {
 				return nil, errors.New("missing client configuration (ClientId, ClientSecret, TenantId) for kusto")
 			}
 			logger.Info("Authenticating using AppId / Secret / TenantId", "clientId", kc.ClientID, "tenantId", kc.TenantID)
-			kcsb = kusto.NewConnectionStringBuilder(kc.Endpoint).WithAadAppKey(kc.ClientID, kc.ClientSecret, kc.TenantID)
+			kcsb = azkustodata.NewConnectionStringBuilder(kc.Endpoint).WithAadAppKey(kc.ClientID, kc.ClientSecret, kc.TenantID)
 		}
 	}
-	kcsb.SetConnectorDetails("Kusto Jaeger", "0.0.1", "plugin", "", false, "")
-	return kusto.New(kcsb)
+	kcsb.ApplicationForTracing = "Kusto Jaeger"
+	return azkustodata.New(kcsb)
 }
 
 // NewStore creates new Kusto store for Jaeger span storage

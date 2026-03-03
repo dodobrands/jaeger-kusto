@@ -3,7 +3,7 @@ package config
 import (
 	"errors"
 
-	"github.com/Azure/azure-kusto-go/kusto"
+	"github.com/Azure/azure-kusto-go/azkustodata"
 )
 
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
@@ -17,13 +17,13 @@ type KustoConfig struct {
 	Database             string              `json:"database"`
 	TraceTableName       string              `json:"traceTableName"`
 	MetricsViewName      string              `json:"metricsViewName,omitempty"`
-	ClientRequestOptions []kusto.QueryOption `json:"clientRequestOptions,omitempty"`
+	ClientRequestOptions []azkustodata.QueryOption `json:"clientRequestOptions,omitempty"`
 }
 
 // ParseKustoConfig reads file at path and returns instance of KustoConfig or error
 func ParseKustoConfig(path string, requestNoTruncation bool, requestNoTimeout bool) (*KustoConfig, error) {
 	c := &KustoConfig{}
-	queryOptions := make([]kusto.QueryOption, 0)
+	queryOptions := make([]azkustodata.QueryOption, 0)
 
 	if err := load(path, c); err != nil {
 		return nil, err
@@ -34,14 +34,14 @@ func ParseKustoConfig(path string, requestNoTruncation bool, requestNoTimeout bo
 	}
 
 	if requestNoTruncation {
-		queryOptions = append(queryOptions, kusto.NoTruncation())
+		queryOptions = append(queryOptions, azkustodata.NoTruncation())
 
 	}
 	if requestNoTimeout {
-		queryOptions = append(queryOptions, kusto.NoRequestTimeout())
+		queryOptions = append(queryOptions, azkustodata.NoRequestTimeout())
 	}
 
-	queryOptions = append(queryOptions, kusto.Application("azure-kusto-jaeger-plugin"))
+	queryOptions = append(queryOptions, azkustodata.Application("azure-kusto-jaeger-plugin"))
 	c.ClientRequestOptions = queryOptions
 	return c, nil
 }

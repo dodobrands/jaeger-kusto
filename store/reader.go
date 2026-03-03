@@ -6,14 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto/data/value"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/Azure/azure-kusto-go/kusto"
-	"github.com/Azure/azure-kusto-go/kusto/data/errors"
-	"github.com/Azure/azure-kusto-go/kusto/data/table"
-	"github.com/Azure/azure-kusto-go/kusto/kql"
+	"github.com/Azure/azure-kusto-go/azkustodata"
+	"github.com/Azure/azure-kusto-go/azkustodata/kql"
+	kustoquery "github.com/Azure/azure-kusto-go/azkustodata/query"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 )
@@ -23,17 +21,17 @@ type kustoSpanReader struct {
 	database           string
 	tableName          string
 	logger             hclog.Logger
-	defaultReadOptions []kusto.QueryOption
+	defaultReadOptions []azkustodata.QueryOption
 	cache              *discoveryCache      // nil when caching is disabled
 	depRefresher       *dependencyRefresher // nil when caching is disabled
 }
 
 type kustoReaderClient interface {
-	Query(ctx context.Context, db string, query kusto.Statement, options ...kusto.QueryOption) (*kusto.RowIterator, error)
+	Query(ctx context.Context, db string, query azkustodata.Statement, options ...azkustodata.QueryOption) (kustoquery.Dataset, error)
 }
 
 
-func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger, defaultReadOptions []kusto.QueryOption, cache *discoveryCache) (*kustoSpanReader, error) {
+func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger, defaultReadOptions []azkustodata.QueryOption, cache *discoveryCache) (*kustoSpanReader, error) {
 	return &kustoSpanReader{
 		client:             factory.Reader(),
 		database:           factory.Database,
@@ -51,6 +49,47 @@ func GetClientId() string {
 	return fmt.Sprintf("azure-kusto-jaeger-%s", uuid.New().String())
 }
 
+// otelStatusCodeToKusto maps Jaeger-style otel.status_code values to the raw SpanStatus column values in Kusto.
+var otelStatusCodeToKusto = map[string]string{
+	"ERROR": "STATUS_CODE_ERROR",
+	"OK":    "STATUS_CODE_OK",
+	"UNSET": "STATUS_CODE_UNSET",
+}
+
+// spanKindToKusto maps Jaeger-style span.kind values to the raw SpanKind column values in Kusto.
+var spanKindToKusto = map[string]string{
+	"server":   "SPAN_KIND_SERVER",
+	"client":   "SPAN_KIND_CLIENT",
+	"consumer": "SPAN_KIND_CONSUMER",
+	"producer": "SPAN_KIND_PRODUCER",
+	"internal": "SPAN_KIND_INTERNAL",
+}
+
+// buildTagFilter returns a KQL filter clause for a tag key/value pair.
+// Synthetic tags (otel.status_code, error, span.kind) are mapped to native Kusto columns
+// since they are not stored in TraceAttributes/ResourceAttributes.
+func buildTagFilter(k, v string) string {
+	switch k {
+	case "otel.status_code":
+		if kustoVal, ok := otelStatusCodeToKusto[v]; ok {
+			return fmt.Sprintf(" | where SpanStatus == '%s'", kustoVal)
+		}
+		return fmt.Sprintf(" | where SpanStatus == '%s'", v)
+	case "error":
+		if v == "true" {
+			return " | where SpanStatus == 'STATUS_CODE_ERROR'"
+		}
+		return " | where SpanStatus != 'STATUS_CODE_ERROR'"
+	case "span.kind":
+		if kustoVal, ok := spanKindToKusto[v]; ok {
+			return fmt.Sprintf(" | where SpanKind == '%s'", kustoVal)
+		}
+		return fmt.Sprintf(" | where SpanKind == '%s'", v)
+	default:
+		return fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
+	}
+}
+
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
 	kustoStmt := kql.New("").AddTable(r.tableName).AddLiteral(getTraceQuery)
@@ -58,34 +97,27 @@ func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (
 
 	clientRequestId := GetClientId()
 	// Append a client request id as well to the request
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions,
-		kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoStmtParams))...)
+	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions,
+		azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoStmtParams))...)
 	if err != nil {
 		r.logger.Error("Failed running GetTrace query. TraceID: %s. ClientRequestId : %s", traceID.String(), clientRequestId)
 		return nil, err
 	}
-	defer iter.Stop()
 
 	var spans []*model.Span
-	err = iter.DoOnRowOrError(
-		func(row *table.Row, e *errors.Error) error {
-			if e != nil {
-				return e
-			}
-			rec := kustoSpan{}
-			if err := row.ToStruct(&rec); err != nil {
-				return err
-			}
-			var span *model.Span
-			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
-			if err != nil {
-				r.logger.Error(fmt.Sprintf("Error in transformKustoSpanToModelSpan. TraceId: %s SpanId: %s", rec.TraceID, rec.SpanID), err)
-				return err
-			}
-			spans = append(spans, span)
-			return nil
-		},
-	)
+	for _, row := range dataset.Tables()[0].Rows() {
+		rec := kustoSpan{}
+		if err := row.ToStruct(&rec); err != nil {
+			return nil, err
+		}
+		var span *model.Span
+		span, err = transformKustoSpanToModelSpan(&rec, r.logger)
+		if err != nil {
+			r.logger.Error(fmt.Sprintf("Error in transformKustoSpanToModelSpan. TraceId: %s SpanId: %s", rec.TraceID, rec.SpanID), err)
+			return nil, err
+		}
+		spans = append(spans, span)
+	}
 	trace := model.Trace{Spans: spans}
 	return &trace, err
 }
@@ -103,34 +135,24 @@ func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 	clientRequestId := GetClientId()
 	kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getServicesQuery)
 	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
+	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId))...)
 
 	if err != nil {
 		r.logger.Error("Failed running GetServices query. ClientRequestId : %s", clientRequestId)
 		return nil, err
 	}
-	defer iter.Stop()
 
 	type Service struct {
 		ServiceName string `kusto:"ProcessServiceName"`
 	}
 
 	var services []string
-	err = iter.DoOnRowOrError(
-		func(row *table.Row, e *errors.Error) error {
-			if e != nil {
-				return e
-			}
-			service := Service{}
-			if err := row.ToStruct(&service); err != nil {
-				return err
-			}
-			services = append(services, service.ServiceName)
-			return nil
-		},
-	)
-	if err != nil {
-		return nil, err
+	for _, row := range dataset.Tables()[0].Rows() {
+		service := Service{}
+		if err := row.ToStruct(&service); err != nil {
+			return nil, err
+		}
+		services = append(services, service.ServiceName)
 	}
 
 	if r.cache != nil {
@@ -156,43 +178,36 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 		SpanKind      string `kusto:"SpanKind"`
 	}
 	clientRequestId := GetClientId()
-	var iter *kusto.RowIterator
+	var dataset kustoquery.Dataset
 	var err error
 	if query.ServiceName == "" && query.SpanKind == "" {
 		kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getOpsWithNoParamsQuery)
-		iter, err = r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId))...)
+		dataset, err = r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId))...)
 	}
 
 	if query.ServiceName != "" && query.SpanKind == "" {
 		kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getOpsWithParamsQuery)
 		kustoStmtParams := kql.NewParameters().AddString("ParamProcessServiceName", query.ServiceName)
 
-		iter, err = r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoStmtParams))...)
+		dataset, err = r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoStmtParams))...)
 	}
 
 	if err != nil {
 		r.logger.Error("Failed running GetOperations query. ClientRequestId : %s", clientRequestId)
 		return nil, err
 	}
-	defer iter.Stop()
 
 	operations := []spanstore.Operation{}
-	err = iter.DoOnRowOrError(
-		func(row *table.Row, e *errors.Error) error {
-			if e != nil {
-				return e
-			}
-			operation := Operation{}
-			if err := row.ToStruct(&operation); err != nil {
-				return err
-			}
-			operations = append(operations, spanstore.Operation{
-				Name:     operation.OperationName,
-				SpanKind: operation.SpanKind,
-			})
-			return nil
-		},
-	)
+	for _, row := range dataset.Tables()[0].Rows() {
+		operation := Operation{}
+		if err := row.ToStruct(&operation); err != nil {
+			return nil, err
+		}
+		operations = append(operations, spanstore.Operation{
+			Name:     operation.OperationName,
+			SpanKind: operation.SpanKind,
+		})
+	}
 
 	if err != nil {
 		return nil, err
@@ -232,8 +247,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 
 	if query.Tags != nil {
 		for k, v := range query.Tags {
-			replacedTag := strings.ReplaceAll(k, ".", TagDotReplacementCharacter)
-			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", replacedTag, v, replacedTag, v)
+			tagFilter := fmt.Sprintf(" | where TraceAttributes['%s'] == '%s' or ResourceAttributes['%s'] == '%s'", k, v, k, v)
 			kustoStmt = kustoStmt.AddUnsafe(tagFilter)
 		}
 	}
@@ -263,29 +277,22 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 
 	r.logger.Debug("FindTraceIDs query: %s", kustoStmt.String())
 	clientRequestId := GetClientId()
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoParameters))...)
+	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoParameters))...)
 	if err != nil {
 		return nil, err
 	}
-	defer iter.Stop()
 
 	var traceIds []model.TraceID
-	err = iter.DoOnRowOrError(
-		func(row *table.Row, e *errors.Error) error {
-			if e != nil {
-				return e
-			}
-			rec := TraceID{}
-			if err := row.ToStruct(&rec); err != nil {
-				return err
-			}
-			traceID, err := model.TraceIDFromString(rec.TraceID)
-			traceIds = append(traceIds, traceID)
-			return err
-		},
-	)
-	if err != nil {
-		return nil, err
+	for _, row := range dataset.Tables()[0].Rows() {
+		rec := TraceID{}
+		if err := row.ToStruct(&rec); err != nil {
+			return nil, err
+		}
+		traceID, err := model.TraceIDFromString(rec.TraceID)
+		if err != nil {
+			return nil, err
+		}
+		traceIds = append(traceIds, traceID)
 	}
 
 	return traceIds, err
@@ -354,34 +361,27 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 
 	r.logger.Debug("FindTraces query: %s", kustoStmt.String())
 	clientRequestId := GetClientId()
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoParameters))...)
+	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoParameters))...)
 	if err != nil {
 		return nil, err
 	}
-	defer iter.Stop()
 
 	m := make(map[model.TraceID][]*model.Span)
 
-	err = iter.DoOnRowOrError(
-		func(row *table.Row, e *errors.Error) error {
-			if e != nil {
-				return e
-			}
-			rec := kustoSpan{}
-			if err := row.ToStruct(&rec); err != nil {
-				return err
-			}
+	for _, row := range dataset.Tables()[0].Rows() {
+		rec := kustoSpan{}
+		if err := row.ToStruct(&rec); err != nil {
+			return nil, err
+		}
 
-			var span *model.Span
-			span, err = transformKustoSpanToModelSpan(&rec, r.logger)
+		var span *model.Span
+		span, err = transformKustoSpanToModelSpan(&rec, r.logger)
 
-			if err != nil {
-				return err
-			}
-			m[span.TraceID] = append(m[span.TraceID], span)
-			return nil
-		},
-	)
+		if err != nil {
+			return nil, err
+		}
+		m[span.TraceID] = append(m[span.TraceID], span)
+	}
 
 	var traces []*model.Trace
 
@@ -419,39 +419,32 @@ func (r *kustoSpanReader) GetDependencies(ctx context.Context, endTs time.Time, 
 // fetchDependencies executes the dependency graph query against Kusto directly.
 func (r *kustoSpanReader) fetchDependencies(ctx context.Context, endTs time.Time, lookback time.Duration) ([]model.DependencyLink, error) {
 	type kustoDependencyLink struct {
-		Parent    string     `kusto:"Parent"`
-		Child     string     `kusto:"Child"`
-		CallCount value.Long `kusto:"CallCount"`
+		Parent    string `kusto:"Parent"`
+		Child     string `kusto:"Child"`
+		CallCount int64  `kusto:"CallCount"`
 	}
 
 	kustoStmt := kql.New(queryResultsCacheAge + "let spans = ").AddTable(r.tableName).AddLiteral(getDependenciesGraphQuery)
 	kustoParams := kql.NewParameters().AddDateTime("ParamEndTs", endTs).AddTimespan("ParamLookBack", lookback)
 	clientRequestId := GetClientId()
-	iter, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, kusto.ClientRequestID(clientRequestId), kusto.QueryParameters(kustoParams))...)
+	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoParams))...)
 	if err != nil {
 		return nil, err
 	}
-	defer iter.Stop()
 
 	var dependencyLinks []model.DependencyLink
-	err = iter.DoOnRowOrError(
-		func(row *table.Row, e *errors.Error) error {
-			if e != nil {
-				return e
-			}
-			rec := kustoDependencyLink{}
-			if err := row.ToStruct(&rec); err != nil {
-				return err
-			}
+	for _, row := range dataset.Tables()[0].Rows() {
+		rec := kustoDependencyLink{}
+		if err := row.ToStruct(&rec); err != nil {
+			return nil, err
+		}
 
-			dependencyLinks = append(dependencyLinks, model.DependencyLink{
-				Parent:    rec.Parent,
-				Child:     rec.Child,
-				CallCount: uint64(rec.CallCount.Value),
-			})
-			return nil
-		},
-	)
+		dependencyLinks = append(dependencyLinks, model.DependencyLink{
+			Parent:    rec.Parent,
+			Child:     rec.Child,
+			CallCount: uint64(rec.CallCount),
+		})
+	}
 
 	return dependencyLinks, err
 }

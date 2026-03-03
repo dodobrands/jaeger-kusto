@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto/data/value"
+	"github.com/Azure/azure-kusto-go/azkustodata/value"
 	"github.com/hashicorp/go-hclog"
 	"github.com/jaegertracing/jaeger/model"
 	"github.com/jaegertracing/jaeger/plugin/storage/es/spanstore/dbmodel"
@@ -114,7 +114,7 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 
 	escapeProcessTags(kustoSpan.ProcessTags.Value)
 	// Replace the special chars(including start and end []) for correct JSON parsing
-	replacer := strings.NewReplacer(":[", ":\"[", "],", "]\",", "\\", "")
+	replacer := strings.NewReplacer(":[", ":\"[", "],", "]\",", "]}", "]\"}", "\\", "")
 	processTag := []byte(replacer.Replace(string(kustoSpan.ProcessTags.Value)))
 	err = json.Unmarshal(processTag, &process.Tag)
 	// See if this parsing yielded an error ?

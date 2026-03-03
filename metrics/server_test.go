@@ -10,7 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto"
+	"github.com/Azure/azure-kusto-go/azkustodata"
+	"github.com/Azure/azure-kusto-go/azkustodata/query"
 	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,8 +20,8 @@ import (
 // mockKustoClient is a test double that returns no results.
 type mockKustoClient struct{}
 
-func (m *mockKustoClient) Query(_ context.Context, _ string, _ kusto.Statement, _ ...kusto.QueryOption) (*kusto.RowIterator, error) {
-	// Return an empty iterator - we can't easily construct one without a real Kusto connection.
+func (m *mockKustoClient) Query(_ context.Context, _ string, _ azkustodata.Statement, _ ...azkustodata.QueryOption) (query.Dataset, error) {
+	// Return a nil dataset - we can't easily construct one without a real Kusto connection.
 	// For unit tests, we test the parser/translator independently; server integration tests
 	// verify the HTTP wiring.
 	return nil, nil
@@ -95,8 +96,8 @@ func TestServer_QueryRange_InvalidQuery(t *testing.T) {
 	assert.Equal(t, "error", resp["status"])
 }
 
-func TestServer_QueryRange_CallRate_NilIterator(t *testing.T) {
-	// The mock returns nil iterator which will cause an error - this tests error handling
+func TestServer_QueryRange_CallRate_NilDataset(t *testing.T) {
+	// The mock returns nil dataset which will cause an error - this tests error handling
 	srv := newTestServer()
 
 	form := url.Values{}
@@ -111,7 +112,7 @@ func TestServer_QueryRange_CallRate_NilIterator(t *testing.T) {
 
 	srv.Handler().ServeHTTP(w, req)
 
-	// Expect internal server error because mock returns nil iterator
+	// Expect internal server error because mock returns nil dataset
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 

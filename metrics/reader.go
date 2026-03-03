@@ -6,11 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-kusto-go/kusto"
-	"github.com/Azure/azure-kusto-go/kusto/data/errors"
-	"github.com/Azure/azure-kusto-go/kusto/data/table"
-	"github.com/Azure/azure-kusto-go/kusto/data/value"
-	"github.com/Azure/azure-kusto-go/kusto/kql"
+	"github.com/Azure/azure-kusto-go/azkustodata"
+	"github.com/Azure/azure-kusto-go/azkustodata/kql"
+	"github.com/Azure/azure-kusto-go/azkustodata/query"
 	"github.com/hashicorp/go-hclog"
 )
 
@@ -21,12 +19,12 @@ type KustoMetricsReader struct {
 	traceTable     string
 	metricsView    string
 	logger         hclog.Logger
-	readOptions    []kusto.QueryOption
+	readOptions    []azkustodata.QueryOption
 	useRawTable    bool // if true, query OTELTraces directly instead of materialized view
 }
 
 type kustoQueryClient interface {
-	Query(ctx context.Context, db string, query kusto.Statement, options ...kusto.QueryOption) (*kusto.RowIterator, error)
+	Query(ctx context.Context, db string, query azkustodata.Statement, options ...azkustodata.QueryOption) (query.Dataset, error)
 }
 
 // KustoMetricsReaderConfig holds configuration for the metrics reader.
@@ -36,7 +34,7 @@ type KustoMetricsReaderConfig struct {
 	TraceTable  string
 	MetricsView string // materialized view name; if empty, uses TraceTable directly
 	Logger      hclog.Logger
-	ReadOptions []kusto.QueryOption
+	ReadOptions []azkustodata.QueryOption
 }
 
 // NewKustoMetricsReader creates a new Kusto metrics reader.
@@ -59,10 +57,10 @@ func NewKustoMetricsReader(cfg KustoMetricsReaderConfig) *KustoMetricsReader {
 
 // metricsRow maps to Kusto query result columns.
 type metricsRow struct {
-	TimeBucket  time.Time  `kusto:"TimeBucket"`
-	ServiceName string     `kusto:"ServiceName"`
-	SpanName    string     `kusto:"SpanName"`
-	MetricValue value.Real `kusto:"MetricValue"`
+	TimeBucket  time.Time `kusto:"TimeBucket"`
+	ServiceName string    `kusto:"ServiceName"`
+	SpanName    string    `kusto:"SpanName"`
+	MetricValue float64   `kusto:"MetricValue"`
 }
 
 // QueryCallRates returns call rate metrics from Kusto.
@@ -178,37 +176,32 @@ func (r *KustoMetricsReader) executeMetricsQuery(ctx context.Context, query stri
 	r.logger.Debug("executing metrics KQL query", "query", query)
 
 	stmt := kql.New("").AddUnsafe(query)
-	iter, err := r.client.Query(ctx, r.database, stmt, r.readOptions...)
+	dataset, err := r.client.Query(ctx, r.database, stmt, r.readOptions...)
 	if err != nil {
 		r.logger.Error("failed executing metrics query", "error", err)
 		return nil, fmt.Errorf("kusto metrics query failed: %w", err)
 	}
-	if iter == nil {
-		return nil, fmt.Errorf("kusto metrics query returned nil iterator")
+	if dataset == nil {
+		return nil, fmt.Errorf("kusto metrics query returned nil dataset")
 	}
-	defer iter.Stop()
+
+	tables := dataset.Tables()
+	if len(tables) == 0 {
+		return nil, fmt.Errorf("kusto metrics query returned no tables")
+	}
 
 	var rows []MetricRow
-	err = iter.DoOnRowOrError(
-		func(row *table.Row, e *errors.Error) error {
-			if e != nil {
-				return e
-			}
-			rec := metricsRow{}
-			if err := row.ToStruct(&rec); err != nil {
-				return err
-			}
-			rows = append(rows, MetricRow{
-				Timestamp:   rec.TimeBucket,
-				ServiceName: rec.ServiceName,
-				SpanName:    rec.SpanName,
-				Value:       rec.MetricValue.Value,
-			})
-			return nil
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error reading metrics results: %w", err)
+	for _, row := range tables[0].Rows() {
+		rec := metricsRow{}
+		if err := row.ToStruct(&rec); err != nil {
+			return nil, err
+		}
+		rows = append(rows, MetricRow{
+			Timestamp:   rec.TimeBucket,
+			ServiceName: rec.ServiceName,
+			SpanName:    rec.SpanName,
+			Value:       rec.MetricValue,
+		})
 	}
 
 	return rows, nil
