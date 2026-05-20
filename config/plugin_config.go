@@ -7,21 +7,22 @@ const (
 
 // PluginConfig contains global options
 type PluginConfig struct {
-	DiagnosticsProfilingEnabled bool    `json:"diagnosticsProfilingEnabled"`
-	DiagnosticsListenAddress    string  `json:"diagnosticsListenAddress"`
-	KustoConfigPath             string  `json:"kustoConfigPath"`
-	LogLevel                    string  `json:"logLevel"`
-	LogJson                     bool    `json:"logJson"`
-	RemoteMode                  bool    `json:"remoteMode"`
-	RemoteListenAddress         string  `json:"remoteListenAddress"`
-	TracingSamplerPercentage    float64 `json:"tracingSamplerPercentage"`
-	TracingRPCMetrics           bool    `json:"tracingRPCMetrics"`
-	ReadNoTruncation            bool    `json:"readNoTruncation"`
-	ReadNoTimeout               bool    `json:"readNoTimeout"`
-	MetricsEnabled              bool    `json:"metricsEnabled"`
-	MetricsListenAddress        string  `json:"metricsListenAddress"`
-	CacheDiscoveryQueries       bool    `json:"cacheDiscoveryQueries"`
-	CacheDiscoveryTTL           string  `json:"cacheDiscoveryTTL"`
+	DiagnosticsProfilingEnabled bool     `json:"diagnosticsProfilingEnabled"`
+	DiagnosticsListenAddress    string   `json:"diagnosticsListenAddress"`
+	KustoConfigPath             string   `json:"kustoConfigPath"`
+	LogLevel                    string   `json:"logLevel"`
+	LogJson                     bool     `json:"logJson"`
+	RemoteMode                  bool     `json:"remoteMode"`
+	RemoteListenAddress         string   `json:"remoteListenAddress"`
+	TracingSamplerPercentage    float64  `json:"tracingSamplerPercentage"`
+	TracingRPCMetrics           bool     `json:"tracingRPCMetrics"`
+	ReadNoTruncation            bool     `json:"readNoTruncation"`
+	ReadNoTimeout               bool     `json:"readNoTimeout"`
+	MetricsEnabled              bool     `json:"metricsEnabled"`
+	MetricsListenAddress        string   `json:"metricsListenAddress"`
+	CacheDiscoveryQueries       bool     `json:"cacheDiscoveryQueries"`
+	CacheDiscoveryTTL           string   `json:"cacheDiscoveryTTL"`
+	DependencySkipServices      []string `json:"dependencySkipServices"`
 }
 
 // NewDefaultPluginConfig returns default configuration options
@@ -42,6 +43,7 @@ func NewDefaultPluginConfig() *PluginConfig {
 		MetricsListenAddress:        ":9090",
 		CacheDiscoveryQueries:       false,
 		CacheDiscoveryTTL:           "6h",
+		DependencySkipServices:      nil,
 	}
 }
 

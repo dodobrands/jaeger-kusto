@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Azure/azure-kusto-go/azkustodata/kql"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
@@ -27,7 +28,8 @@ var (
 )
 
 const (
-	queryResultsCacheAge = `set query_results_cache_max_age = time(5m);`
+	queryResultsCacheAge  = `set query_results_cache_max_age = time(5m);`
+	dependencySkipMaxHops = 32
 
 	getOpsWithNoParams      = `getOpsWithNoParams`
 	getOpsWithNoParamsQuery = `
@@ -73,20 +75,61 @@ func getOpsWithParamsQuery() string {
 	| project OperationName=SpanName,SpanKind`, serviceNameExpression())
 }
 
+func normalizeDependencySkipServices(services []string) []string {
+	normalized := make([]string, 0, len(services))
+	seen := make(map[string]struct{}, len(services))
+
+	for _, service := range services {
+		service = strings.TrimSpace(strings.ToLower(service))
+		if service == "" {
+			continue
+		}
+		if _, ok := seen[service]; ok {
+			continue
+		}
+		seen[service] = struct{}{}
+		normalized = append(normalized, service)
+	}
+
+	return normalized
+}
+
+func dependencyGraphSpansQuery() string {
+	return fmt.Sprintf(`
+	| where StartTime between ((ParamEndTs - ParamLookBack) .. ParamEndTs)
+	| where isnotempty(ParentID)
+	| extend ProcessServiceName = %s
+	| project SpanNodeID=strcat(TraceID, "/", SpanID), ParentNodeID=strcat(TraceID, "/", ParentID), ServiceName=ProcessServiceName`, serviceNameExpression())
+}
+
 // getDependenciesGraphQuery uses Kusto graph semantics for a single time-filtered scan
 // instead of the previous self-join which scanned the full table on the parent side.
 // The table name is injected via AddTable before this literal.
 func getDependenciesGraphQuery() string {
-	return fmt.Sprintf(`
-	| where StartTime between ((ParamEndTs - ParamLookBack) .. ParamEndTs)
-	| extend ProcessServiceName = %s
-	| project SpanID, ParentID, ServiceName=ProcessServiceName;
+	return `
 	spans
-	| make-graph ParentID --> SpanID with spans on SpanID
+	| make-graph ParentNodeID --> SpanNodeID with spans on SpanNodeID
 	| graph-match (parent)-[]->(child)
 		where parent.ServiceName != child.ServiceName
 		project Parent=parent.ServiceName, Child=child.ServiceName
-	| summarize CallCount=count() by Parent, Child`, serviceNameExpression())
+	| summarize CallCount=count() by Parent, Child`
+}
+
+func getCollapsedDependenciesGraphQuery(skipServices []string) string {
+	if len(skipServices) == 0 {
+		return getDependenciesGraphQuery()
+	}
+
+	return fmt.Sprintf(`
+	spans
+	| make-graph ParentNodeID --> SpanNodeID with spans on SpanNodeID
+	| graph-match (parent)-[dependencyPath*1..%d]->(child)
+		where parent.ServiceName != child.ServiceName
+			and not(set_has_element(ParamDependencySkipServices, tolower(parent.ServiceName)))
+			and not(set_has_element(ParamDependencySkipServices, tolower(child.ServiceName)))
+			and all(inner_nodes(dependencyPath), set_has_element(ParamDependencySkipServices, tolower(ServiceName)))
+		project Parent=parent.ServiceName, Child=child.ServiceName
+	| summarize CallCount=count() by Parent, Child`, dependencySkipMaxHops)
 }
 
 func getTraceIdBaseQuery() string {

@@ -12,7 +12,8 @@ data:
         "readNoTruncation": {{ default false .Values.baseConfig.readNoTruncation }},
         "readNoTimeout": {{ default false .Values.baseConfig.readNoTimeout }},
         "metricsEnabled": {{ default false .Values.metrics.enabled }},
-        "metricsListenAddress": {{ .Values.metrics.prometheusListenAddress | default ":9090" | quote }}
+        "metricsListenAddress": {{ .Values.metrics.prometheusListenAddress | default ":9090" | quote }},
+        "dependencySkipServices": {{ .Values.baseConfig.dependencySkipServices | default (list) | toJson }}
     }
 kind: ConfigMap
 metadata:

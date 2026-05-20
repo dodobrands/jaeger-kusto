@@ -56,6 +56,7 @@ baseConfig:
   logJson: 
   readNoTruncation: 
   readNoTimeout:
+  dependencySkipServices:
 authConfig:
   clientId: 
   useManagedIdentity: 
@@ -75,6 +76,7 @@ logLevel | Log level for the plugin | info |
 logJson | Log format | false |
 readNoTruncation | In case [KustoQueryLimits](aka.ms/kustoquerylimits) are hit, use this property to enable no-truncation | false |
 readNoTimeout | The default query timeout is 10 minutes which should be sufficient for most cases. In case this needs to be extended to no-timeout | false |
+dependencySkipServices | Service names to hide from Jaeger dependency/system architecture links | [] |
 clientId | Client ID for the plugin, represents the ClientId in case of ManagedIdentity. Set it to the AAD APP Id to use AAD Auth | "" |
 clientSecret | If AAD Auth is used, set this to the AAD APP Secret for the APP Id| "" |
 tenantId | The AAD tenant to use for authentication | "" |
@@ -98,6 +100,18 @@ The plugin is in early development stage (alpha) and has the following known lim
 * Jaeger V2 support is currently **query-only**. The backend does not implement OTLP trace writes or Jaeger's full remote-storage certification flow.
 * Trace ingestion must already happen through the OpenTelemetry Collector / Azure Data Explorer exporter path.
 * Legacy Jaeger 1.x HashiCorp go-plugin mode is no longer supported. Run the backend with `remoteMode: true`.
+
+## Skipping services in the dependency view
+
+If an infrastructure or proxy service skews Jaeger's System Architecture view, configure it in `jaeger-kusto-plugin-config.json`:
+
+```json
+{
+  "dependencySkipServices": ["my-proxy-service"]
+}
+```
+
+Matching is case-insensitive. Skipped services are collapsed out of the dependency path, so a flow like `A -> proxy -> C` is shown as `A -> C`.
 
 
 ## RED Metrics / Service Performance Monitoring (SPM)

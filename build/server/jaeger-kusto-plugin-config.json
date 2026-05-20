@@ -8,5 +8,8 @@
     "tracingRPCMetrics": false,
     "metricsEnabled": true,
     "metricsListenAddress": ":9090",
-    "serviceCatalogViewName": "ServiceCatalog"
+    "serviceCatalogViewName": "ServiceCatalog",
+    "cacheDiscoveryQueries": true,
+    "cacheDiscoveryTTL": "4h",
+    "dependencySkipServices": ["infra-nginx-ingress"]
 }

@@ -68,7 +68,12 @@ func NewStore(kc *config.KustoConfig, pc *config.PluginConfig, logger hclog.Logg
 		logger.Info("Discovery query caching enabled", "ttl", cacheTTL)
 	}
 
-	reader, err := newKustoSpanReader(factory, kc.ServiceCatalogViewName, logger, kc.ClientRequestOptions, cache)
+	var dependencySkipServices []string
+	if pc != nil {
+		dependencySkipServices = pc.DependencySkipServices
+	}
+
+	reader, err := newKustoSpanReader(factory, kc.ServiceCatalogViewName, dependencySkipServices, logger, kc.ClientRequestOptions, cache)
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ type kustoSpanReader struct {
 	database               string
 	tableName              string
 	serviceCatalogViewName string
+	dependencySkipServices []string
 	logger                 hclog.Logger
 	defaultReadOptions     []azkustodata.QueryOption
 	cache                  *discoveryCache      // nil when caching is disabled
@@ -30,12 +31,13 @@ type kustoReaderClient interface {
 	Query(ctx context.Context, db string, query azkustodata.Statement, options ...azkustodata.QueryOption) (kustoquery.Dataset, error)
 }
 
-func newKustoSpanReader(factory *kustoFactory, serviceCatalogViewName string, logger hclog.Logger, defaultReadOptions []azkustodata.QueryOption, cache *discoveryCache) (*kustoSpanReader, error) {
+func newKustoSpanReader(factory *kustoFactory, serviceCatalogViewName string, dependencySkipServices []string, logger hclog.Logger, defaultReadOptions []azkustodata.QueryOption, cache *discoveryCache) (*kustoSpanReader, error) {
 	return &kustoSpanReader{
 		client:                 factory.Reader(),
 		database:               factory.Database,
 		tableName:              factory.Table,
 		serviceCatalogViewName: serviceCatalogViewName,
+		dependencySkipServices: normalizeDependencySkipServices(dependencySkipServices),
 		logger:                 logger,
 		defaultReadOptions:     defaultReadOptions,
 		cache:                  cache,
@@ -431,8 +433,16 @@ func (r *kustoSpanReader) fetchDependencies(ctx context.Context, endTs time.Time
 		CallCount int64  `kusto:"CallCount"`
 	}
 
-	kustoStmt := kql.New(queryResultsCacheAge + "let spans = ").AddTable(r.tableName).AddUnsafe(getDependenciesGraphQuery())
+	query := getDependenciesGraphQuery()
+	if len(r.dependencySkipServices) > 0 {
+		query = getCollapsedDependenciesGraphQuery(r.dependencySkipServices)
+	}
+
+	kustoStmt := kql.New(queryResultsCacheAge + "let spans = ").AddTable(r.tableName).AddUnsafe(dependencyGraphSpansQuery()).AddLiteral(";").AddUnsafe(query)
 	kustoParams := kql.NewParameters().AddDateTime("ParamEndTs", endTs).AddTimespan("ParamLookBack", lookback)
+	if len(r.dependencySkipServices) > 0 {
+		kustoParams = kustoParams.AddDynamic("ParamDependencySkipServices", r.dependencySkipServices)
+	}
 	clientRequestId := GetClientId()
 	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoParams))...)
 	if err != nil {
