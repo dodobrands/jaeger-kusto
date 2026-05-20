@@ -8,16 +8,17 @@ import (
 
 // KustoConfig contains AzureAD service principal and Kusto cluster configs
 type KustoConfig struct {
-	ClientID             string              `json:"clientId"`
-	ClientSecret         string              `json:"clientSecret"`
-	TenantID             string              `json:"tenantId"`
-	UseManagedIdentity   bool                `json:"useManagedIdentity,omitempty"`
-	UseWorkloadIdentity  bool                `json:"useWorkloadIdentity,omitempty"`
-	Endpoint             string              `json:"endpoint"`
-	Database             string              `json:"database"`
-	TraceTableName       string              `json:"traceTableName"`
-	MetricsViewName      string              `json:"metricsViewName,omitempty"`
-	ClientRequestOptions []azkustodata.QueryOption `json:"clientRequestOptions,omitempty"`
+	ClientID               string                    `json:"clientId"`
+	ClientSecret           string                    `json:"clientSecret"`
+	TenantID               string                    `json:"tenantId"`
+	UseManagedIdentity     bool                      `json:"useManagedIdentity,omitempty"`
+	UseWorkloadIdentity    bool                      `json:"useWorkloadIdentity,omitempty"`
+	Endpoint               string                    `json:"endpoint"`
+	Database               string                    `json:"database"`
+	TraceTableName         string                    `json:"traceTableName"`
+	MetricsViewName        string                    `json:"metricsViewName,omitempty"`
+	ServiceCatalogViewName string                    `json:"serviceCatalogViewName,omitempty"`
+	ClientRequestOptions   []azkustodata.QueryOption `json:"clientRequestOptions,omitempty"`
 }
 
 // ParseKustoConfig reads file at path and returns instance of KustoConfig or error

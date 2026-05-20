@@ -26,7 +26,7 @@ import (
 func TestKustoSpanReader_GetTrace(tester *testing.T) {
 
 	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
-	expectedOutput := fmt.Sprintf(`%s | where TraceID == ParamTraceID | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(ResourceAttributes.['service.name']) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`, kustoConfig.TraceTableName)
+	expectedOutput := fmt.Sprintf(`%s | where TraceID == ParamTraceID | extend Duration=datetime_diff('microsecond',EndTime,StartTime) , ProcessServiceName=tostring(column_ifexists("ServiceName", ResourceAttributes.['service.name'])) | project-rename Tags=TraceAttributes,Logs=Events,ProcessTags=ResourceAttributes| extend References=iff(isempty(ParentID),todynamic("[]"),pack_array(bag_pack("refType","CHILD_OF","traceID",TraceID,"spanID",ParentID)))`, kustoConfig.TraceTableName)
 	trace, _ := model.TraceIDFromString("3f6d8f4c5008352055c14804949d1e57")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -56,7 +56,7 @@ func TestKustoSpanReader_GetTrace(tester *testing.T) {
 
 func TestKustoSpanReader_GetServices(t *testing.T) {
 	kustoConfig, _ := config.ParseKustoConfig(testPluginConfig.KustoConfigPath, testPluginConfig.ReadNoTruncation, testPluginConfig.ReadNoTimeout)
-	expectedOutput := fmt.Sprintf(`set query_results_cache_max_age = time(5m); %s | extend ProcessServiceName=tostring(ResourceAttributes.['service.name']) | where ProcessServiceName!=\"\" | summarize by ProcessServiceName | sort by ProcessServiceName asc`, kustoConfig.TraceTableName)
+	expectedOutput := fmt.Sprintf(`set query_results_cache_max_age = time(5m); %s | extend ProcessServiceName=tostring(column_ifexists("ServiceName", ResourceAttributes.['service.name'])) | where ProcessServiceName!=\"\" | summarize by ProcessServiceName | sort by ProcessServiceName asc`, kustoConfig.TraceTableName)
 	var buf bytes.Buffer
 	logger := hclog.New(&hclog.LoggerOptions{
 		Output: &buf,
@@ -171,10 +171,10 @@ func TestFindTracesWithDurationMaxVerification(t *testing.T) {
 
 	output := buf.String()
 
-	assert.Contains(t, output, "| where Duration < ParamDurationMax", 
+	assert.Contains(t, output, "| where Duration < ParamDurationMax",
 		"FindTraces should generate correct duration max condition with '<' operator")
 
-	assert.NotContains(t, output, "| where Duration > ParamDurationMax", 
+	assert.NotContains(t, output, "| where Duration > ParamDurationMax",
 		"FindTraces should not generate incorrect duration max condition with '>' operator")
 }
 
@@ -215,10 +215,10 @@ func TestFindTracesWithDurationMax(t *testing.T) {
 
 	output := buf.String()
 
-	assert.Contains(t, output, "| where Duration < ParamDurationMax", 
+	assert.Contains(t, output, "| where Duration < ParamDurationMax",
 		"FindTraces should generate correct duration max condition with '<' operator")
 
-	assert.NotContains(t, output, "| where Duration > ParamDurationMax", 
+	assert.NotContains(t, output, "| where Duration > ParamDurationMax",
 		"FindTraces should not generate incorrect duration max condition with '>' operator")
 }
 
@@ -260,14 +260,14 @@ func TestFindTracesWithBothDurationMinAndMax(t *testing.T) {
 
 	output := buf.String()
 
-	assert.Contains(t, output, "| where Duration > ParamDurationMin", 
+	assert.Contains(t, output, "| where Duration > ParamDurationMin",
 		"FindTraces should generate correct duration min condition with '>' operator")
-	assert.Contains(t, output, "| where Duration < ParamDurationMax", 
+	assert.Contains(t, output, "| where Duration < ParamDurationMax",
 		"FindTraces should generate correct duration max condition with '<' operator")
-		
-	assert.NotContains(t, output, "| where Duration < ParamDurationMin", 
+
+	assert.NotContains(t, output, "| where Duration < ParamDurationMin",
 		"FindTraces should not generate incorrect duration min condition")
-	assert.NotContains(t, output, "| where Duration > ParamDurationMax", 
+	assert.NotContains(t, output, "| where Duration > ParamDurationMax",
 		"FindTraces should not generate incorrect duration max condition")
 }
 
@@ -308,10 +308,10 @@ func TestFindTraceIDsWithDurationMax(t *testing.T) {
 
 	output := buf.String()
 
-	assert.Contains(t, output, "| where Duration < ParamDurationMax", 
+	assert.Contains(t, output, "| where Duration < ParamDurationMax",
 		"FindTraceIDs should generate correct duration max condition with '<' operator")
 
-	assert.NotContains(t, output, "| where Duration > ParamDurationMax", 
+	assert.NotContains(t, output, "| where Duration > ParamDurationMax",
 		"FindTraceIDs should not generate incorrect duration max condition with '>' operator")
 }
 
@@ -352,7 +352,7 @@ func TestFindTraceIDsWithDurationMin(t *testing.T) {
 
 	output := buf.String()
 
-	assert.Contains(t, output, "| where Duration > ParamDurationMin", 
+	assert.Contains(t, output, "| where Duration > ParamDurationMin",
 		"FindTraceIDs should generate correct duration min condition with '>' operator")
 }
 
@@ -394,14 +394,13 @@ func TestFindTraceIDsWithBothDurationMinAndMax(t *testing.T) {
 
 	output := buf.String()
 
-	assert.Contains(t, output, "| where Duration > ParamDurationMin", 
+	assert.Contains(t, output, "| where Duration > ParamDurationMin",
 		"FindTraceIDs should generate correct duration min condition with '>' operator")
-	assert.Contains(t, output, "| where Duration < ParamDurationMax", 
+	assert.Contains(t, output, "| where Duration < ParamDurationMax",
 		"FindTraceIDs should generate correct duration max condition with '<' operator")
-		
-	assert.NotContains(t, output, "| where Duration < ParamDurationMin", 
+
+	assert.NotContains(t, output, "| where Duration < ParamDurationMin",
 		"FindTraceIDs should not generate incorrect duration min condition")
-	assert.NotContains(t, output, "| where Duration > ParamDurationMax", 
+	assert.NotContains(t, output, "| where Duration > ParamDurationMax",
 		"FindTraceIDs should not generate incorrect duration max condition")
 }
-

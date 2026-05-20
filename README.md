@@ -26,6 +26,7 @@ Extending the authentication table provided in the Jaeger plugin, the applicatio
   "endpoint": "https://<cluster>.<region>.kusto.windows.net",
   "tenantId": "",
   "traceTableName":"<trace_table>",// defaults to `OTELTraces` if not provided
+  "serviceCatalogViewName":"ServiceCatalog", // optional; speeds up Jaeger service discovery
   "useManagedIdentity": false, // defaults to false, if true, the plugin will use managed identity to authenticate. Use the clientId field to pass the clientId of the managed identity
   "useWorkloadIdentity": false // defaults to false, if true, the plugin will use WorkloadIdentity to authenticate. Note that the plugin will use the default credentials of the VM/Container to authenticate, it will first look for Azure environment variables to authenticate, followed by the workload identity
 }
@@ -62,6 +63,7 @@ authConfig:
   clusterUrl: 
   tenantId: 
   traceTableName: 
+  serviceCatalogViewName:
 ```
 
 
@@ -81,6 +83,7 @@ useWorkloadIdentity | Use Azure default credentials (uses workload identity in c
 database | Database name to query the traces | "" |
 clusterUrl | Cluster URL where the OTEL traces have been ingested | "" |
 traceTableName | Trace table name to query | "OTELTraces" |
+serviceCatalogViewName | Optional materialized view used by Jaeger service discovery (`GetServices`) | "" |
 image.repository | The repository to pull the kusto-jaeger plugin | e.g. agramachandran/jaeger-kusto |
 image.tag | The tag of kusto-jaeger-plugin to use  | e.g. "1.1.0-Preview" |
 image.pullPolicy | Image pull policy | "IfNotPresent" |
@@ -111,7 +114,7 @@ OTELTraces table → SpanMetrics Materialized View → PromQL Shim (built-in) �
 
 ### Setup
 
-#### 1. Create the Kusto Materialized View
+#### 1. Create the Kusto Materialized Views
 
 Run the KQL script in `config/kusto-materialized-view.kql` against your Kusto database:
 
@@ -120,7 +123,7 @@ Run the KQL script in `config/kusto-materialized-view.kql` against your Kusto da
 {
     OTELTraces
     | extend
-        ServiceName = tostring(ResourceAttributes.['service.name']),
+        ServiceName = tostring(column_ifexists("ServiceName", ResourceAttributes.['service.name'])),
         Duration_ms = datetime_diff('millisecond', EndTime, StartTime),
         StatusCode = tostring(SpanStatus)
     | summarize
@@ -157,6 +160,20 @@ And add the materialized view name to your Kusto configuration JSON:
 If `metricsViewName` is empty, the plugin will query the raw `OTELTraces` table directly (slower for large datasets but requires no materialized view setup).
 
 A full example is at `build/server/jaeger-kusto-plugin-config.json`.
+
+### Optional: speed up Jaeger service discovery
+
+If your trace table already has a physical `ServiceName` column, the plugin now prefers it automatically instead of extracting `ResourceAttributes['service.name']` on every read query.
+
+For the cheapest `GetServices` path in the Jaeger UI, also configure the `ServiceCatalog` materialized view from `config/kusto-materialized-view.kql`:
+
+```json
+{
+    "serviceCatalogViewName": "ServiceCatalog"
+}
+```
+
+The recommended `ServiceCatalog` example uses `backfill=false`, so rollout does not force a full historical scan of the trace table.
 
 #### 3. Configure Jaeger V2
 
@@ -217,6 +234,7 @@ Ensure `jaeger-ui.json` has the Monitor tab enabled:
 | `metricsEnabled` | Enable the PromQL shim server for RED metrics | `false` |
 | `metricsListenAddress` | Listen address for the PromQL shim HTTP server | `":9090"` |
 | `metricsViewName` | Name of the Kusto materialized view for pre-computed metrics | `""` (uses raw trace table) |
+| `serviceCatalogViewName` | Name of the Kusto materialized view used for Jaeger service discovery | `""` (uses raw trace table) |
 
 
 ## Reporting issues

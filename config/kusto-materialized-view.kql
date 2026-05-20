@@ -1,11 +1,37 @@
--- Kusto Materialized View for RED Metrics (SPM)
+-- Kusto Materialized Views for Jaeger
 -- Run this script in your Azure Data Explorer (Kusto) database
--- to create the materialized view that pre-aggregates span metrics.
+-- to create optional materialized views for Jaeger service discovery and RED metrics.
 --
 -- Prerequisites:
 --   - The OTELTraces table must exist and be receiving data
 --   - Adjust the table name if different from 'OTELTraces'
 --
+-- Service discovery optimization:
+-- Jaeger UI often calls GetServices, which otherwise scans the raw trace table and
+-- summarizes service names. This MV keeps that lookup small and cheap.
+--
+-- Efficiency notes:
+--   - Prefer backfill=false for the initial rollout to avoid a full historical scan.
+--   - The plugin will query this via materialized_view("ServiceCatalog"), so only the
+--     materialized part is scanned.
+--   - The plugin also automatically prefers a physical ServiceName column when it exists.
+--
+-- Set "serviceCatalogViewName": "ServiceCatalog" in jaeger-kusto-config.json to use it.
+--
+.create-or-alter async materialized-view with (backfill=false) ServiceCatalog on table OTELTraces
+{
+    OTELTraces
+    | extend ServiceName = tostring(column_ifexists("ServiceName", ResourceAttributes.['service.name']))
+    | where isnotempty(ServiceName)
+    | summarize LastSeen=max(StartTime) by ServiceName, Bucket=bin(StartTime, 1d)
+}
+
+-- Query to test the service catalog view:
+-- materialized_view("ServiceCatalog")
+-- | summarize LastSeen=max(LastSeen) by ServiceName
+-- | order by ServiceName asc
+
+-- RED metrics optimization:
 -- This creates a materialized view that aggregates per-minute metrics:
 --   - call_count: total span count
 --   - error_count: spans with STATUS_CODE_ERROR
@@ -29,7 +55,7 @@
 {
     OTELTraces
     | extend 
-        ServiceName = tostring(ResourceAttributes.['service.name']),
+        ServiceName = tostring(column_ifexists("ServiceName", ResourceAttributes.['service.name'])),
         Duration_ms = datetime_diff('millisecond', EndTime, StartTime),
         StatusCode = tostring(SpanStatus)
     | summarize 
@@ -46,7 +72,7 @@
 -- Verify the view was created:
 -- .show materialized-view SpanMetrics
 
--- Query to test the materialized view:
+-- Query to test the RED metrics materialized view:
 -- SpanMetrics
 -- | where StartTime > ago(1h)
 -- | summarize sum(call_count), sum(error_count) by ServiceName

@@ -7,5 +7,6 @@
     "tracingSamplerPercentage": 0.0,
     "tracingRPCMetrics": false,
     "metricsEnabled": true,
-    "metricsListenAddress": ":9090"
+    "metricsListenAddress": ":9090",
+    "serviceCatalogViewName": "ServiceCatalog"
 }

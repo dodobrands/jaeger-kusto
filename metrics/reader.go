@@ -14,13 +14,13 @@ import (
 
 // KustoMetricsReader queries Kusto for RED metrics.
 type KustoMetricsReader struct {
-	client         kustoQueryClient
-	database       string
-	traceTable     string
-	metricsView    string
-	logger         hclog.Logger
-	readOptions    []azkustodata.QueryOption
-	useRawTable    bool // if true, query OTELTraces directly instead of materialized view
+	client      kustoQueryClient
+	database    string
+	traceTable  string
+	metricsView string
+	logger      hclog.Logger
+	readOptions []azkustodata.QueryOption
+	useRawTable bool // if true, query OTELTraces directly instead of materialized view
 }
 
 type kustoQueryClient interface {
@@ -150,9 +150,9 @@ func (r *KustoMetricsReader) buildBaseQuery(parsed *ParsedQuery, start, end time
 
 	sb.WriteString(r.metricsView)
 
-	// MV already has ServiceName column; raw table needs to extract it from ResourceAttributes
+	// MV already has ServiceName; raw table resolves from a physical ServiceName column when available.
 	if r.useRawTable {
-		sb.WriteString("\n| extend ServiceName = tostring(ResourceAttributes.['service.name'])")
+		sb.WriteString("\n| extend ServiceName = tostring(column_ifexists(\"ServiceName\", ResourceAttributes.['service.name']))")
 	}
 
 	sb.WriteString(fmt.Sprintf("\n| where StartTime between (datetime(%s) .. datetime(%s))",

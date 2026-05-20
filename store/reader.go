@@ -16,28 +16,29 @@ import (
 )
 
 type kustoSpanReader struct {
-	client             kustoReaderClient
-	database           string
-	tableName          string
-	logger             hclog.Logger
-	defaultReadOptions []azkustodata.QueryOption
-	cache              *discoveryCache      // nil when caching is disabled
-	depRefresher       *dependencyRefresher // nil when caching is disabled
+	client                 kustoReaderClient
+	database               string
+	tableName              string
+	serviceCatalogViewName string
+	logger                 hclog.Logger
+	defaultReadOptions     []azkustodata.QueryOption
+	cache                  *discoveryCache      // nil when caching is disabled
+	depRefresher           *dependencyRefresher // nil when caching is disabled
 }
 
 type kustoReaderClient interface {
 	Query(ctx context.Context, db string, query azkustodata.Statement, options ...azkustodata.QueryOption) (kustoquery.Dataset, error)
 }
 
-
-func newKustoSpanReader(factory *kustoFactory, logger hclog.Logger, defaultReadOptions []azkustodata.QueryOption, cache *discoveryCache) (*kustoSpanReader, error) {
+func newKustoSpanReader(factory *kustoFactory, serviceCatalogViewName string, logger hclog.Logger, defaultReadOptions []azkustodata.QueryOption, cache *discoveryCache) (*kustoSpanReader, error) {
 	return &kustoSpanReader{
-		client:             factory.Reader(),
-		database:           factory.Database,
-		tableName:          factory.Table,
-		logger:             logger,
-		defaultReadOptions: defaultReadOptions,
-		cache:              cache,
+		client:                 factory.Reader(),
+		database:               factory.Database,
+		tableName:              factory.Table,
+		serviceCatalogViewName: serviceCatalogViewName,
+		logger:                 logger,
+		defaultReadOptions:     defaultReadOptions,
+		cache:                  cache,
 	}, nil
 }
 
@@ -91,7 +92,7 @@ func buildTagFilter(k, v string) string {
 
 // GetTrace finds trace by TraceID
 func (r *kustoSpanReader) GetTrace(ctx context.Context, traceID model.TraceID) (*model.Trace, error) {
-	kustoStmt := kql.New("").AddTable(r.tableName).AddLiteral(getTraceQuery)
+	kustoStmt := kql.New("").AddTable(r.tableName).AddUnsafe(getTraceQuery())
 	kustoStmtParams := kql.NewParameters().AddString("ParamTraceID", traceID.String())
 
 	clientRequestId := GetClientId()
@@ -132,7 +133,7 @@ func (r *kustoSpanReader) GetServices(ctx context.Context) ([]string, error) {
 	}
 
 	clientRequestId := GetClientId()
-	kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getServicesQuery)
+	kustoStmt := buildGetServicesStatement(r.tableName, r.serviceCatalogViewName)
 	r.logger.Debug("GetServicesQuery : %s ", kustoStmt.String())
 	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId))...)
 
@@ -185,7 +186,7 @@ func (r *kustoSpanReader) GetOperations(ctx context.Context, query spanstore.Ope
 	}
 
 	if query.ServiceName != "" && query.SpanKind == "" {
-		kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddLiteral(getOpsWithParamsQuery)
+		kustoStmt := kql.New(queryResultsCacheAge).AddTable(r.tableName).AddUnsafe(getOpsWithParamsQuery())
 		kustoStmtParams := kql.NewParameters().AddString("ParamProcessServiceName", query.ServiceName)
 
 		dataset, err = r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoStmtParams))...)
@@ -230,7 +231,7 @@ func (r *kustoSpanReader) FindTraceIDs(ctx context.Context, query *spanstore.Tra
 		TraceID string `kusto:"TraceID"`
 	}
 
-	kustoStmt := kql.New("").AddTable(r.tableName).AddLiteral(getTraceIdBaseQuery)
+	kustoStmt := kql.New("").AddTable(r.tableName).AddUnsafe(getTraceIdBaseQuery())
 	kustoParameters := kql.NewParameters()
 
 	if query.ServiceName != "" {
@@ -310,7 +311,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 		query.NumTraces = defaultNumTraces
 	}
 
-	kustoStmt := kql.New("let TraceIDs = (").AddTable(r.tableName).AddLiteral(getTracesBaseQuery)
+	kustoStmt := kql.New("let TraceIDs = (").AddTable(r.tableName).AddUnsafe(getTracesBaseQuery())
 	kustoParameters := kql.NewParameters()
 
 	if query.ServiceName != "" {
@@ -350,7 +351,7 @@ func (r *kustoSpanReader) FindTraces(ctx context.Context, query *spanstore.Trace
 	kustoStmt = kustoStmt.AddLiteral(` | sample ParamNumTraces`)
 	kustoParameters = kustoParameters.AddInt("ParamNumTraces", int32(query.NumTraces))
 
-	kustoStmt = kustoStmt.AddLiteral(`); `).AddTable(r.tableName).AddLiteral(getTracesBaseQuery)
+	kustoStmt = kustoStmt.AddLiteral(`); `).AddTable(r.tableName).AddUnsafe(getTracesBaseQuery())
 
 	kustoStmt = kustoStmt.AddLiteral(` | where StartTime > ParamStartTimeMin`)
 	kustoParameters = kustoParameters.AddDateTime("ParamStartTimeMin", query.StartTimeMin)
@@ -430,7 +431,7 @@ func (r *kustoSpanReader) fetchDependencies(ctx context.Context, endTs time.Time
 		CallCount int64  `kusto:"CallCount"`
 	}
 
-	kustoStmt := kql.New(queryResultsCacheAge + "let spans = ").AddTable(r.tableName).AddLiteral(getDependenciesGraphQuery)
+	kustoStmt := kql.New(queryResultsCacheAge + "let spans = ").AddTable(r.tableName).AddUnsafe(getDependenciesGraphQuery())
 	kustoParams := kql.NewParameters().AddDateTime("ParamEndTs", endTs).AddTimespan("ParamLookBack", lookback)
 	clientRequestId := GetClientId()
 	dataset, err := r.client.Query(ctx, r.database, kustoStmt, append(r.defaultReadOptions, azkustodata.ClientRequestID(clientRequestId), azkustodata.QueryParameters(kustoParams))...)

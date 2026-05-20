@@ -179,7 +179,7 @@ func TestBuildBaseQuery(t *testing.T) {
 		q := reader.buildBaseQuery(parsed, start, end, time.Minute)
 
 		assert.Contains(t, q, "OTELTraces")
-		assert.Contains(t, q, "ServiceName = tostring(ResourceAttributes.['service.name'])")
+		assert.Contains(t, q, "ServiceName = tostring(column_ifexists(\"ServiceName\", ResourceAttributes.['service.name']))")
 		assert.Contains(t, q, "where StartTime between")
 	})
 }

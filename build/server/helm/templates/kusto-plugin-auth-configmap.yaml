@@ -14,16 +14,19 @@ data:
         "useWorkloadIdentity": {{default false .Values.authConfig.useWorkloadIdentity }},
         "useManagedIdentity": {{default false .Values.authConfig.useManagedIdentity}},
         "database": {{ .Values.authConfig.database  | quote}},
-        {{- if or .Values.authConfig.tenantId .Values.authConfig.metricsViewName }}
+        {{- if or .Values.authConfig.tenantId .Values.authConfig.metricsViewName .Values.authConfig.serviceCatalogViewName }}
         "endpoint": {{ .Values.authConfig.clusterUrl | quote}},
         {{- else }}
         "endpoint": {{ .Values.authConfig.clusterUrl | quote}}
         {{- end }}
         {{- if .Values.authConfig.tenantId }}
-        "tenantId": {{ .Values.authConfig.tenantId | quote}}{{- if .Values.authConfig.metricsViewName }},{{- end }}
+        "tenantId": {{ .Values.authConfig.tenantId | quote}}{{- if or .Values.authConfig.metricsViewName .Values.authConfig.serviceCatalogViewName }},{{- end }}
         {{- end }}
         {{- if .Values.authConfig.metricsViewName }}
-        "metricsViewName": {{ .Values.authConfig.metricsViewName | quote}}
+        "metricsViewName": {{ .Values.authConfig.metricsViewName | quote}}{{- if .Values.authConfig.serviceCatalogViewName }},{{- end }}
+        {{- end }}
+        {{- if .Values.authConfig.serviceCatalogViewName }}
+        "serviceCatalogViewName": {{ .Values.authConfig.serviceCatalogViewName | quote}}
         {{- end }}
     }
 kind: ConfigMap
