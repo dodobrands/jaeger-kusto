@@ -28,11 +28,6 @@ spec:
       containers:
         - args:
             - --config=/config/jaeger-kusto-plugin-config.json
-          env:
-            - name: JAEGER_AGENT_HOST
-              value: jaeger
-            - name: JAEGER_AGENT_PORT
-              value: "6831"
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           name: kusto-jaeger-plugin

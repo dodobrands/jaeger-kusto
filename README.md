@@ -1,7 +1,7 @@
 # Azure Data Explorer (Kusto) gRPC backend for Jaeger
 
 
-This is a storage grpc-plugin for [Jaeger end-to-end distributed tracing system](https://www.jaegertracing.io/) and was originally forked from https://github.com/dodopizza/jaeger-kusto and extended now to support OTEL exporter used with ADX.
+This is a read-only gRPC storage backend for [Jaeger](https://www.jaegertracing.io/) backed by Azure Data Explorer (Kusto). It was originally forked from https://github.com/dodopizza/jaeger-kusto and extended to read OTEL trace data written to ADX by the Azure Data Explorer exporter.
 
 
 
@@ -35,10 +35,12 @@ Save this file as `jaeger-kusto-config.json` in the root of repository.
 
 
 ## Local runs
-Plugin can be started as a standalone app (GRPC server):
+Plugin can be started as a standalone gRPC server for Jaeger V2 query mode:
 
 * Standalone app (as grpc server). For this mode, use `docker compose --file build/server/docker-compose.yml up --build`
-Once this is done, you can run the Jaeger UI on <http://localhost:16686> and see the traces in the UI.
+* The compose stack starts the `jaeger-kusto` backend and a Jaeger V2 query/UI container that reads traces from Kusto.
+* Jaeger runs in **query-only** mode in this setup. Trace ingestion still happens outside this repository via the OpenTelemetry Collector ADX exporter.
+* Once this is done, you can run the Jaeger UI on <http://localhost:16686> and see the traces in the UI.
 
 
 # Deploying to Kubernetes
@@ -88,10 +90,11 @@ image.pullPolicy | Image pull policy | "IfNotPresent" |
 
 ## Known Limitations
 
-The plugin is in early development stage (alpha) has the following known limitations:
+The plugin is in early development stage (alpha) and has the following known limitations:
 
-* Currently search by tags is not implemented
-* There are deprecated API's in use. These will be fixed in a newer version of the plugin.
+* Jaeger V2 support is currently **query-only**. The backend does not implement OTLP trace writes or Jaeger's full remote-storage certification flow.
+* Trace ingestion must already happen through the OpenTelemetry Collector / Azure Data Explorer exporter path.
+* Legacy Jaeger 1.x HashiCorp go-plugin mode is no longer supported. Run the backend with `remoteMode: true`.
 
 
 ## RED Metrics / Service Performance Monitoring (SPM)
@@ -157,15 +160,25 @@ A full example is at `build/server/jaeger-kusto-plugin-config.json`.
 
 #### 3. Configure Jaeger V2
 
-Use the sample configuration at `config/jaeger-v2-config.yaml`:
+Use the sample configuration at `config/jaeger-v2-config.yaml`. It intentionally runs Jaeger in query-only mode with a `nop` traces pipeline because this plugin is read-only:
 
 ```yaml
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [nop]
+      processors: [batch]
+      exporters: [nop]
+
 extensions:
   jaeger_storage:
     backends:
       kusto_traces:
         grpc:
           endpoint: "jaeger-kusto:8989"
+          tls:
+            insecure: true
     metric_backends:
       kusto_metrics:
         prometheus:
@@ -176,6 +189,15 @@ extensions:
       metrics: kusto_metrics
     ui:
       config_file: /etc/jaeger/jaeger-ui.json
+
+receivers:
+  nop:
+
+processors:
+  batch:
+
+exporters:
+  nop:
 ```
 
 Ensure `jaeger-ui.json` has the Monitor tab enabled:

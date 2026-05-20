@@ -2,14 +2,14 @@ package runner
 
 import (
 	"github.com/dodopizza/jaeger-kusto/config"
+	kustostore "github.com/dodopizza/jaeger-kusto/store"
 	ot "github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	"github.com/hashicorp/go-hclog"
-	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 	"github.com/opentracing/opentracing-go"
 	"google.golang.org/grpc"
 )
 
-func Serve(c *config.PluginConfig, store shared.StoragePlugin, logger hclog.Logger) error {
+func Serve(c *config.PluginConfig, store *kustostore.Store, logger hclog.Logger) error {
 	if c.RemoteMode {
 		return serveServer(c, store, logger)
 	}

@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    io.service.name: kusto-jaeger
+  name: jaeger-config
+  namespace: {{ .Release.Namespace }}
+data:
+  config.yaml: |-
+    service:
+      extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+      pipelines:
+        traces:
+          receivers: [nop]
+          processors: [batch]
+          exporters: [nop]
+      telemetry:
+        resource:
+          service.name: jaeger-query
+        metrics:
+          level: detailed
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
+        logs:
+          level: info
+
+    extensions:
+      healthcheckv2:
+        use_v2: true
+        http:
+
+      jaeger_query:
+        storage:
+          traces: kusto_traces
+{{ if .Values.metrics.enabled }}
+          metrics: kusto_metrics
+{{ end }}
+        ui:
+          config_file: /etc/jaeger/jaeger-ui.json
+
+      jaeger_storage:
+        backends:
+          kusto_traces:
+            grpc:
+              endpoint: "kusto-jaeger-plugin:8989"
+              tls:
+                insecure: true
+{{ if .Values.metrics.enabled }}
+        metric_backends:
+          kusto_metrics:
+            prometheus:
+              endpoint: {{ .Values.metrics.prometheusServerUrl | default "http://kusto-jaeger-plugin:9090" | quote }}
+{{ end }}
+
+    receivers:
+      nop:
+
+    processors:
+      batch:
+
+    exporters:
+      nop:

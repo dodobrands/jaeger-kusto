@@ -7,12 +7,11 @@ import (
 	"github.com/Azure/azure-kusto-go/azkustodata"
 	"github.com/dodopizza/jaeger-kusto/config"
 	"github.com/hashicorp/go-hclog"
-	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 	"github.com/jaegertracing/jaeger/storage/dependencystore"
 	"github.com/jaegertracing/jaeger/storage/spanstore"
 )
 
-type store struct {
+type Store struct {
 	dependencyStoreReader dependencystore.Reader
 	reader                spanstore.Reader
 	writer                spanstore.Writer
@@ -46,8 +45,8 @@ func NewKustoClient(kc *config.KustoConfig, logger hclog.Logger) (*azkustodata.C
 	return azkustodata.New(kcsb)
 }
 
-// NewStore creates new Kusto store for Jaeger span storage
-func NewStore(kc *config.KustoConfig, pc *config.PluginConfig, logger hclog.Logger) (shared.StoragePlugin, error) {
+// NewStore creates new Kusto store for Jaeger span storage.
+func NewStore(kc *config.KustoConfig, pc *config.PluginConfig, logger hclog.Logger) (*Store, error) {
 	client, err := NewKustoClient(kc, logger)
 	if err != nil {
 		return nil, err
@@ -81,7 +80,7 @@ func NewStore(kc *config.KustoConfig, pc *config.PluginConfig, logger hclog.Logg
 		refresher.start()
 	}
 
-	store := &store{
+	store := &Store{
 		dependencyStoreReader: reader,
 		reader:                reader,
 		writer:                &noopSpanWriter{},
@@ -91,16 +90,16 @@ func NewStore(kc *config.KustoConfig, pc *config.PluginConfig, logger hclog.Logg
 }
 
 // DependencyReader returns implementation of dependencystore.Reader interface
-func (store *store) DependencyReader() dependencystore.Reader {
+func (store *Store) DependencyReader() dependencystore.Reader {
 	return store.dependencyStoreReader
 }
 
 // SpanReader returns implementation of spanstore.Reader interface
-func (store *store) SpanReader() spanstore.Reader {
+func (store *Store) SpanReader() spanstore.Reader {
 	return store.reader
 }
 
 // SpanWriter returns implementation of spanstore.Writer interface
-func (store *store) SpanWriter() spanstore.Writer {
+func (store *Store) SpanWriter() spanstore.Writer {
 	return store.writer
 }

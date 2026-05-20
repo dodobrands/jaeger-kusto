@@ -3,9 +3,13 @@ package runner
 import (
 	"fmt"
 	"github.com/dodopizza/jaeger-kusto/config"
+	storagev2 "github.com/dodopizza/jaeger-kusto/internal/proto/storage/v2"
+	"github.com/dodopizza/jaeger-kusto/storagev2grpc"
+	kustostore "github.com/dodopizza/jaeger-kusto/store"
 	"github.com/hashicorp/go-hclog"
-	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 	"net"
 	"net/url"
 	"os"
@@ -15,21 +19,26 @@ import (
 	"syscall"
 )
 
-func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclog.Logger) error {
-	plugin := shared.StorageGRPCPlugin{
-		Impl: store,
-	}
-
+func serveServer(c *config.PluginConfig, store *kustostore.Store, logger hclog.Logger) error {
 	tracer, closer, err := config.NewPluginTracer(c)
 	if err != nil {
 		return err
 	}
-	defer closer.Close()
+	defer func() {
+		if err := closer.Close(); err != nil {
+			logger.Error("failed to close server tracer", "error", err)
+		}
+	}()
 
 	server := newGRPCServerWithTracer(tracer)
-	if err := plugin.GRPCServer(nil, server); err != nil {
-		return err
-	}
+	handler := storagev2grpc.NewHandler(store.SpanReader(), store.DependencyReader(), logger)
+	handler.Register(server)
+
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(server, healthServer)
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus(storagev2.TraceReader_ServiceDesc.ServiceName, grpc_health_v1.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus(storagev2.DependencyReader_ServiceDesc.ServiceName, grpc_health_v1.HealthCheckResponse_SERVING)
 
 	scheme, address, err := parseListenAddress(c.RemoteListenAddress)
 	if err != nil {
@@ -38,7 +47,11 @@ func serveServer(c *config.PluginConfig, store shared.StoragePlugin, logger hclo
 
 	// perform cleanup for unix domain socket, before process exit
 	if scheme == "unix" {
-		defer os.Remove(address)
+		defer func() {
+			if err := os.Remove(address); err != nil && !os.IsNotExist(err) {
+				logger.Warn("failed to remove unix socket", "error", err, "address", address)
+			}
+		}()
 	}
 
 	listener, err := net.Listen(scheme, address)

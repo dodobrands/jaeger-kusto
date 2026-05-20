@@ -1,28 +1,13 @@
 package runner
 
 import (
+	"fmt"
+
 	"github.com/dodopizza/jaeger-kusto/config"
+	kustostore "github.com/dodopizza/jaeger-kusto/store"
 	"github.com/hashicorp/go-hclog"
-	storageGRPC "github.com/jaegertracing/jaeger/plugin/storage/grpc"
-	"github.com/jaegertracing/jaeger/plugin/storage/grpc/shared"
-	googleGRPC "google.golang.org/grpc"
 )
 
-func servePlugin(c *config.PluginConfig, store shared.StoragePlugin, logger hclog.Logger) error {
-	pluginServices := shared.PluginServices{
-		Store: store,
-	}
-
-	tracer, closer, err := config.NewPluginTracer(c)
-	if err != nil {
-		return err
-	}
-	defer closer.Close()
-
-	logger.Info("starting plugin")
-	storageGRPC.ServeWithGRPCServer(&pluginServices, func(options []googleGRPC.ServerOption) *googleGRPC.Server {
-		return newGRPCServerWithTracer(tracer)
-	})
-
-	return nil
+func servePlugin(_ *config.PluginConfig, _ *kustostore.Store, _ hclog.Logger) error {
+	return fmt.Errorf("legacy Jaeger v1 plugin mode is no longer supported; set remoteMode=true to run the Jaeger v2 storage server")
 }

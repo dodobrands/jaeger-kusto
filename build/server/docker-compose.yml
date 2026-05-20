@@ -1,6 +1,5 @@
-version: "3.8"
 services:
-  plugin:
+  jaeger-kusto:
     build:
       context: ../..
       dockerfile: build/server/Dockerfile
@@ -11,28 +10,21 @@ services:
       - "6060:6060"
       - "8989:8989"
       - "9090:9090"
-    environment:
-      "JAEGER_AGENT_HOST": "jaeger"
-      "JAEGER_AGENT_PORT": "6831"
     volumes:
       - "../../jaeger-kusto-config.json:/config/jaeger-kusto-config.json"
       - "./jaeger-kusto-plugin-config.json:/config/jaeger-kusto-plugin-config.json"
   jaeger:
-    image: jaegertracing/all-in-one:1.76.0
-    ports:
-      - "5775:5775/udp"
-      - "6831:6831/udp"
-      - "6832:6832/udp"
-      - "5778:5778"
-      - "16686:16686"
-      - "14268:14268"
-      - "14250:14250"
-    environment:
-      "SPAN_STORAGE_TYPE": "grpc"
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.18.0
     command:
-      - "--grpc-storage.server=plugin:8989"
-      - "--grpc-storage.connection-timeout=60s"
-      - "--grpc-storage.tls.enabled=false"
+      - "--config=/etc/jaeger/config.yaml"
+    volumes:
+      - "../../config/jaeger-v2-config.yaml:/etc/jaeger/config.yaml:ro"
+      - "../../config/jaeger-ui.json:/etc/jaeger/jaeger-ui.json:ro"
+    ports:
+      - "16686:16686"
+      - "13133:13133"
+    depends_on:
+      - jaeger-kusto
   # hotrod:
   #   image: jaegertracing/example-hotrod:latest
   #   ports:
