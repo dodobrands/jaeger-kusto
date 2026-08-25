@@ -66,14 +66,7 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 		logger.Error(fmt.Sprintf("Error in Unmarshal tags %s. TraceId: %s  SpanId: %s ", kustoSpan.Tags.String(), kustoSpan.TraceID, kustoSpan.SpanID), err)
 		return nil, err
 	}
-	// Fix issues where there are JSON Array types in tags. On nested tag types convert arrays to string. Else this causes issues in span parsing in Jaeger span transformations
-	for key, element := range tags {
-		elementString := fmt.Sprint(element)
-		isArray := len(elementString) > 0 && elementString[0] == '['
-		if isArray {
-			tags[key] = elementString
-		}
-	}
+	sanitizeTags(tags)
 
 	// https://opentelemetry.io/docs/specs/otel/trace/sdk_exporters/jaeger/#status
 	switch kustoSpan.SpanStatus {
@@ -122,6 +115,8 @@ func transformKustoSpanToModelSpan(kustoSpan *kustoSpan, logger hclog.Logger) (*
 		logger.Error(fmt.Sprintf("ERROR in Unmarshal processTags %s. TraceId: %s SpanId: %s ", string(kustoSpan.ProcessTags.Value), kustoSpan.TraceID, kustoSpan.SpanID), err)
 		return nil, err
 	}
+
+	sanitizeTags(process.Tag)
 
 	jsonSpan := &dbmodel.Span{
 		TraceID:         dbmodel.TraceID(kustoSpan.TraceID),
@@ -234,6 +229,25 @@ func transformEventsToLogs(kustoSpan *kustoSpan, logger hclog.Logger) ([]dbmodel
 	return logs, nil
 }
 
+// sanitizeTags normalizes tag values that dbmodel.ToDomain cannot convert.
+// JSON arrays become their string form, since nested tag types break Jaeger span
+// transformations. JSON null becomes an empty string: an unset OTLP AnyValue
+// arrives here as nil, which matches no case in ToDomain's type switch and fails
+// the whole span with "invalid tag type in <nil>".
+func sanitizeTags(tags map[string]interface{}) {
+	for key, element := range tags {
+		if element == nil {
+			tags[key] = ""
+			continue
+		}
+		elementString := fmt.Sprint(element)
+		isArray := len(elementString) > 0 && elementString[0] == '['
+		if isArray {
+			tags[key] = elementString
+		}
+	}
+}
+
 // escapeProcessTags replaces the double quotes with single quotes in the process tags list
 func escapeProcessTags(processTagsString []byte) {
 	var insideSquareBrackets bool
@@ -247,4 +261,3 @@ func escapeProcessTags(processTagsString []byte) {
 		}
 	}
 }
-
